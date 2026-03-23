@@ -21,14 +21,9 @@ spec:
     dockerfile: |
       FROM {{ .Values.buildConfig.baseImage }} AS base
 
-      # Resolve the hcp download URL from ConsoleCLIDownload at build time
-      # The build SA has RBAC to GET consoleclidownloads
       USER root
-      RUN HCP_URL=$(oc get consoleclidownload {{ .Values.buildConfig.consoleCLIDownload }} \
-            -o jsonpath='{range .spec.links[*]}{.href}{"\t"}{.text}{"\n"}{end}' \
-            | grep -i 'linux' | grep -i 'amd64\|x86_64' | head -1 | awk '{print $1}') && \
-          echo "Downloading hcp from: ${HCP_URL}" && \
-          curl -sSL "${HCP_URL}" -o /tmp/hcp.tar.gz && \
+      RUN curl -sSL "http://{{ .Values.buildConfig.hcpDownloadService }}/linux/amd64/hcp.tar.gz" \
+            -o /tmp/hcp.tar.gz && \
           tar xzf /tmp/hcp.tar.gz -C /usr/local/bin && \
           chmod +x /usr/local/bin/hcp && \
           rm -f /tmp/hcp.tar.gz && \

@@ -9,8 +9,8 @@ buildConfig:
   baseImage: quay.io/openshift/origin-cli:latest
   # Schedule periodic rebuilds to pick up new hcp versions (cron format, empty to disable)
   schedule: ""
-  # ConsoleCLIDownload resource name — the build extracts the linux/amd64 URL at build time
-  consoleCLIDownload: hcp-cli-download
+  # Internal service that serves the hcp CLI binaries (runs in the multicluster-engine namespace)
+  hcpDownloadService: hcp-cli-download.multicluster-engine.svc
 
 serviceAccount:
   # SA used by the BuildConfig — needs permission to read consoleclidownloads
