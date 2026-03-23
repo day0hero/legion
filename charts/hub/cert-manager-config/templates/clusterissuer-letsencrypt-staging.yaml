@@ -1,0 +1,16 @@
+{{- if .Values.clusterIssuers.letsEncryptStaging.enabled }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.clusterIssuers.letsEncryptStaging.name }}
+spec:
+  acme:
+    email: {{ .Values.clusterIssuers.letsEncryptStaging.email | quote }}
+    server: {{ .Values.clusterIssuers.letsEncryptStaging.server | quote }}
+    privateKeySecretRef:
+      name: {{ .Values.clusterIssuers.letsEncryptStaging.privateKeySecretRef }}
+    solvers:
+{{- range .Values.clusterIssuers.letsEncryptStaging.solvers }}
+      {{- toYaml (list .) | nindent 4 }}
+{{- end }}
+{{- end }}

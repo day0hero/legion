@@ -1,0 +1,17 @@
+namespace: cluster-provisioning
+
+imageStream:
+  name: hcp-cli
+
+buildConfig:
+  name: hcp-cli
+  # Base image that provides oc + kubectl
+  baseImage: quay.io/openshift/origin-cli:latest
+  # Schedule periodic rebuilds to pick up new hcp versions (cron format, empty to disable)
+  schedule: ""
+  # ConsoleCLIDownload resource name — the build extracts the linux/amd64 URL at build time
+  consoleCLIDownload: hcp-cli-download
+
+serviceAccount:
+  # SA used by the BuildConfig — needs permission to read consoleclidownloads
+  name: hcp-cli-builder

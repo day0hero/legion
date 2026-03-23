@@ -1,0 +1,12 @@
+secretStore:
+  name: vault-backend
+  kind: ClusterSecretStore
+
+awsCreds:
+  key: secret/data/hub/aws
+
+pullSecret:
+  key: pushsecrets/global-pull-secret
+
+hypershiftIAM:
+  key: secret/data/hub/hypershift-iam

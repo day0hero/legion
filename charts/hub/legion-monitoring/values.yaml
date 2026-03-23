@@ -1,0 +1,20 @@
+namespace: legion-monitoring
+
+perses:
+  image: docker.io/persesdev/perses:latest
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  route:
+    enabled: true
+
+prometheus:
+  url: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+  # ServiceAccount token for Thanos auth
+  bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+  tlsSkipVerify: true

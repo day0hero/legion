@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cert-manager-config
+description: Configuration for Red Hat cert-manager operator — ClusterIssuers and default certificates
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

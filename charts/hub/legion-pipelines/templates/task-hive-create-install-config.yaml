@@ -1,0 +1,210 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hive-create-install-config
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Generate OpenShift install-config.yaml and store it as a Hive install-config Secret.
+  params:
+    - name: cluster-name
+      type: string
+    - name: base-domain
+      type: string
+    - name: cloud-provider
+      type: string
+    - name: cloud-region
+      type: string
+    - name: control-plane-replicas
+      type: string
+      default: "3"
+    - name: control-plane-machine-type
+      type: string
+    - name: worker-replicas
+      type: string
+      default: "3"
+    - name: worker-machine-type
+      type: string
+    - name: azure-resource-group
+      type: string
+      default: ""
+    - name: gcp-project-id
+      type: string
+      default: ""
+    - name: ssh-public-key
+      type: string
+      default: ""
+  workspaces:
+    - name: install-config
+      description: Holds generated install-config.yaml
+  steps:
+    - name: generate-install-config
+      image: {{ .Values.toolsImage | quote }}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        CLUSTER_NAME="$(params.cluster-name)"
+        BASE_DOMAIN="$(params.base-domain)"
+        CLOUD_PROVIDER="$(params.cloud-provider)"
+        CLOUD_REGION="$(params.cloud-region)"
+        CP_REPLICAS="$(params.control-plane-replicas)"
+        CP_TYPE="$(params.control-plane-machine-type)"
+        WORKER_REPLICAS="$(params.worker-replicas)"
+        WORKER_TYPE="$(params.worker-machine-type)"
+        AZ_RG="$(params.azure-resource-group)"
+        GCP_PROJECT="$(params.gcp-project-id)"
+        SSH_KEY="$(params.ssh-public-key)"
+        OUT="$(workspaces.install-config.path)/install-config.yaml"
+        mkdir -p "$(workspaces.install-config.path)"
+
+        PROVIDER="$(echo "${CLOUD_PROVIDER}" | tr '[:upper:]' '[:lower:]')"
+
+        case "${PROVIDER}" in
+          aws|amazon)
+            cat > "${OUT}" <<EOF
+        apiVersion: v1
+        baseDomain: ${BASE_DOMAIN}
+        compute:
+        - architecture: amd64
+          hyperthreading: Enabled
+          name: worker
+          platform:
+            aws:
+              type: ${WORKER_TYPE}
+              rootVolume:
+                size: 200
+                type: gp3
+          replicas: ${WORKER_REPLICAS}
+        controlPlane:
+          architecture: amd64
+          hyperthreading: Enabled
+          name: master
+          platform:
+            aws:
+              type: ${CP_TYPE}
+              rootVolume:
+                size: 200
+                type: gp3
+          replicas: ${CP_REPLICAS}
+        metadata:
+          name: ${CLUSTER_NAME}
+        networking:
+          clusterNetwork:
+          - cidr: 10.128.0.0/14
+            hostPrefix: 23
+          machineNetwork:
+          - cidr: 10.0.0.0/16
+          networkType: OVNKubernetes
+          serviceNetwork:
+          - 172.30.0.0/16
+        platform:
+          aws:
+            region: ${CLOUD_REGION}
+        pullSecret: ""
+        EOF
+            ;;
+          gcp|google)
+            cat > "${OUT}" <<EOF
+        apiVersion: v1
+        baseDomain: ${BASE_DOMAIN}
+        compute:
+        - architecture: amd64
+          hyperthreading: Enabled
+          name: worker
+          platform:
+            gcp:
+              type: ${WORKER_TYPE}
+          replicas: ${WORKER_REPLICAS}
+        controlPlane:
+          architecture: amd64
+          hyperthreading: Enabled
+          name: master
+          platform:
+            gcp:
+              type: ${CP_TYPE}
+          replicas: ${CP_REPLICAS}
+        metadata:
+          name: ${CLUSTER_NAME}
+        networking:
+          clusterNetwork:
+          - cidr: 10.128.0.0/14
+            hostPrefix: 23
+          machineNetwork:
+          - cidr: 10.0.0.0/16
+          networkType: OVNKubernetes
+          serviceNetwork:
+          - 172.30.0.0/16
+        platform:
+          gcp:
+            projectID: ${GCP_PROJECT}
+            region: ${CLOUD_REGION}
+        pullSecret: ""
+        EOF
+            ;;
+          azure)
+            cat > "${OUT}" <<EOF
+        apiVersion: v1
+        baseDomain: ${BASE_DOMAIN}
+        compute:
+        - architecture: amd64
+          hyperthreading: Enabled
+          name: worker
+          platform:
+            azure:
+              type: ${WORKER_TYPE}
+              osDisk:
+                diskSizeGB: 512
+                type: Premium_LRS
+          replicas: ${WORKER_REPLICAS}
+        controlPlane:
+          architecture: amd64
+          hyperthreading: Enabled
+          name: master
+          platform:
+            azure:
+              type: ${CP_TYPE}
+              osDisk:
+                diskSizeGB: 512
+                type: Premium_LRS
+          replicas: ${CP_REPLICAS}
+        metadata:
+          name: ${CLUSTER_NAME}
+        networking:
+          clusterNetwork:
+          - cidr: 10.128.0.0/14
+            hostPrefix: 23
+          machineNetwork:
+          - cidr: 10.0.0.0/16
+          networkType: OVNKubernetes
+          serviceNetwork:
+          - 172.30.0.0/16
+        platform:
+          azure:
+            baseDomainResourceGroupName: ${AZ_RG}
+            cloudName: AzurePublicCloud
+            region: ${CLOUD_REGION}
+        pullSecret: ""
+        EOF
+            ;;
+          *)
+            echo "unsupported cloud-provider: ${CLOUD_PROVIDER}" >&2
+            exit 1
+            ;;
+        esac
+
+        if [ -n "${SSH_KEY}" ]; then
+          printf '\nsshKey: |-\n' >> "${OUT}"
+          printf '%s\n' "${SSH_KEY}" | sed 's/^/  /' >> "${OUT}"
+        fi
+    - name: create-install-config-secret
+      image: {{ .Values.toolsImage | quote }}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        CLUSTER_NAME="$(params.cluster-name)"
+        CFG="$(workspaces.install-config.path)/install-config.yaml"
+        oc create secret generic "${CLUSTER_NAME}-install-config" \
+          -n "${CLUSTER_NAME}" \
+          --from-file=install-config.yaml="${CFG}" \
+          --dry-run=client -o yaml | oc apply -f -

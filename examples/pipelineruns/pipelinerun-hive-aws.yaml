@@ -1,0 +1,48 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: deploy-hive-
+  namespace: cluster-provisioning
+spec:
+  pipelineRef:
+    name: deploy-hive-cluster
+  params:
+  - name: cluster-name
+    value: my-hive-cluster
+  - name: base-domain
+    value: example.com
+  - name: cloud-provider
+    value: aws
+  - name: cloud-region
+    value: us-east-2
+  - name: cluster-version
+    value: img4.17.0-x86-64-appsub
+  - name: control-plane-machine-type
+    value: m5.xlarge
+  - name: worker-machine-type
+    value: m5.xlarge
+  - name: control-plane-replicas
+    value: "3"
+  - name: worker-replicas
+    value: "3"
+  - name: timeout-minutes
+    value: "90"
+  taskRunTemplate:
+    serviceAccountName: legion-provisioner
+  workspaces:
+  - name: install-config
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  - name: kubeconfig
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

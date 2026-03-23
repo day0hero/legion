@@ -1,0 +1,122 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: destroy-hive-cluster
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Tear down a Hive-provisioned cluster and optionally remove its namespace.
+  params:
+    - name: cluster-name
+      type: string
+    - name: timeout-minutes
+      type: string
+      default: "30"
+    - name: delete-namespace
+      type: string
+      default: "true"
+  tasks:
+    - name: delete-cluster-deployment
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: timeout-minutes
+          value: $(params.timeout-minutes)
+      taskSpec:
+        params:
+          - name: cluster-name
+            type: string
+          - name: timeout-minutes
+            type: string
+            default: "30"
+        steps:
+          - name: delete-cd
+            image: {{ .Values.toolsImage | quote }}
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              CLUSTER_NAME="$(params.cluster-name)"
+              TIMEOUT="$(params.timeout-minutes)"
+              oc delete clusterdeployment "${CLUSTER_NAME}" \
+                -n "${CLUSTER_NAME}" \
+                --ignore-not-found \
+                --wait=true \
+                --timeout="${TIMEOUT}m"
+
+    - name: delete-managed-cluster
+      runAfter:
+        - delete-cluster-deployment
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: timeout-minutes
+          value: $(params.timeout-minutes)
+      taskSpec:
+        params:
+          - name: cluster-name
+            type: string
+          - name: timeout-minutes
+            type: string
+            default: "30"
+        steps:
+          - name: delete-mc
+            image: {{ .Values.toolsImage | quote }}
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              CLUSTER_NAME="$(params.cluster-name)"
+              TIMEOUT="$(params.timeout-minutes)"
+              oc delete managedcluster "${CLUSTER_NAME}" \
+                --ignore-not-found \
+                --wait=true \
+                --timeout="${TIMEOUT}m"
+
+    - name: cleanup-namespace
+      runAfter:
+        - delete-managed-cluster
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: timeout-minutes
+          value: $(params.timeout-minutes)
+        - name: delete-namespace
+          value: $(params.delete-namespace)
+      taskSpec:
+        params:
+          - name: cluster-name
+            type: string
+          - name: timeout-minutes
+            type: string
+            default: "30"
+          - name: delete-namespace
+            type: string
+            default: "true"
+        steps:
+          - name: cleanup
+            image: {{ .Values.toolsImage | quote }}
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              CLUSTER_NAME="$(params.cluster-name)"
+              TIMEOUT="$(params.timeout-minutes)"
+              DELETE_NS="$(params.delete-namespace)"
+              if [ "${DELETE_NS}" = "true" ]; then
+                oc delete namespace "${CLUSTER_NAME}" \
+                  --ignore-not-found \
+                  --wait=true \
+                  --timeout="${TIMEOUT}m"
+              else
+                oc delete externalsecrets.external-secrets.io --all \
+                  -n "${CLUSTER_NAME}" \
+                  --ignore-not-found \
+                  --wait=false
+                oc delete secrets --all \
+                  -n "${CLUSTER_NAME}" \
+                  --ignore-not-found \
+                  --wait=false
+                oc delete klusterletaddonconfigs.addon.open-cluster-management.io --all \
+                  -n "${CLUSTER_NAME}" \
+                  --ignore-not-found \
+                  --wait=false
+              fi

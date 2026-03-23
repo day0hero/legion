@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: perses
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: perses
+spec:
+  selector:
+    app.kubernetes.io/name: perses
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

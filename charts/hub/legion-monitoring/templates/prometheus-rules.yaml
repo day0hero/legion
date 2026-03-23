@@ -1,0 +1,84 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: legion-monitoring-rules
+  namespace: openshift-monitoring
+  labels:
+    app.kubernetes.io/name: legion-monitoring
+    role: alert-rules
+spec:
+  groups:
+    - name: legion-cluster-metrics
+      interval: 60s
+      rules:
+        - record: legion_pipeline_runs_total
+          expr: |
+            sum by (status) (
+              tekton_pipelines_controller_pipelinerun_count{pipeline=~"deploy-hive-cluster|deploy-hypershift-cluster|destroy-hive-cluster|destroy-hypershift-cluster"}
+            )
+        - record: legion_pipeline_run_duration_p95
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le, pipeline) (
+                rate(tekton_pipelines_controller_pipelinerun_duration_seconds_bucket{pipeline=~"deploy-hive-cluster|deploy-hypershift-cluster"}[1h])
+              )
+            )
+        - record: legion_hub_node_count
+          expr: |
+            count by (role) (
+              kube_node_role{role=~"worker|infra|master"}
+            )
+        - record: legion_hub_node_cpu_utilization
+          expr: |
+            1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))
+        - record: legion_hub_node_memory_utilization
+          expr: |
+            1 - (sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes))
+    - name: legion-alerts
+      rules:
+        - alert: LegionPipelineFailure
+          expr: increase(tekton_pipelines_controller_pipelinerun_count{pipeline=~"deploy-.*",status="failed"}[1h]) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{ printf "Pipeline %s has failed runs in the last hour" "{{ $labels.pipeline }}" | quote }}
+            description: {{ printf "%s failed run(s) detected for pipeline %s" "{{ $value }}" "{{ $labels.pipeline }}" | quote }}
+        - alert: LegionClusterProvisioningSlow
+          expr: legion_pipeline_run_duration_p95 > 5400
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Cluster provisioning taking longer than 90 minutes (p95)"
+            description: {{ printf "Pipeline %s p95 duration is %ss" "{{ $labels.pipeline }}" "{{ $value }}" | quote }}
+        - alert: LegionPersesDown
+          expr: up{job="perses"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Perses monitoring dashboard is down"
+        - alert: LegionHubHighCPU
+          expr: legion_hub_node_cpu_utilization > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Hub cluster CPU utilization above 85%"
+            description: {{ printf "Current utilization: %s" "{{ $value | humanizePercentage }}" | quote }}
+        - alert: LegionHubHighMemory
+          expr: legion_hub_node_memory_utilization > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Hub cluster memory utilization above 85%"
+            description: {{ printf "Current utilization: %s" "{{ $value | humanizePercentage }}" | quote }}
+        - alert: LegionHubAtMaxNodes
+          expr: count(kube_node_info) >= 15
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Hub cluster at or near max node limit — autoscaler cannot add more capacity"

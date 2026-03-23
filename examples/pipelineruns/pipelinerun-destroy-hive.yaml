@@ -1,0 +1,17 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: destroy-hive-
+  namespace: cluster-provisioning
+spec:
+  pipelineRef:
+    name: destroy-hive-cluster
+  params:
+  - name: cluster-name
+    value: my-hive-cluster
+  - name: timeout-minutes
+    value: "30"
+  - name: delete-namespace
+    value: "true"
+  taskRunTemplate:
+    serviceAccountName: legion-provisioner

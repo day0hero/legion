@@ -1,0 +1,20 @@
+# Example Hive cluster request for AWS
+# Submit as a PipelineRun or use as input to the EventListener
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-aws-example
+  namespace: cluster-provisioning
+  labels:
+    legion.io/type: cluster-request
+data:
+  type: hive
+  cluster-name: my-hive-cluster
+  base-domain: example.com
+  cloud-provider: aws
+  cloud-region: us-east-2
+  cluster-version: img4.17.0-x86-64-appsub
+  control-plane-replicas: "3"
+  control-plane-machine-type: m5.xlarge
+  worker-replicas: "3"
+  worker-machine-type: m5.xlarge

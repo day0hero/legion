@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: perses-datasources
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: perses
+data:
+  project.json: |
+    {
+      "kind": "Project",
+      "metadata": {
+        "name": "legion"
+      },
+      "spec": {}
+    }
+  prometheus.json: |
+    {
+      "kind": "Datasource",
+      "metadata": {
+        "name": "prometheus",
+        "project": "legion"
+      },
+      "spec": {
+        "default": true,
+        "plugin": {
+          "kind": "PrometheusDatasource",
+          "spec": {
+            "directUrl": {{ .Values.prometheus.url | quote }}
+          }
+        }
+      }
+    }

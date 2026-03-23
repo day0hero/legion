@@ -1,0 +1,76 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hive-wait-cluster-ready
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Waits for Hive ClusterDeployment to be provisioned and extracts kubeconfig
+  params:
+  - name: cluster-name
+    type: string
+  - name: timeout-minutes
+    type: string
+    default: "90"
+  workspaces:
+  - name: kubeconfig
+  steps:
+  - name: wait-and-extract
+    image: {{ .Values.toolsImage }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      CLUSTER_NAME=$(params.cluster-name)
+      TIMEOUT=$(params.timeout-minutes)
+      TIMEOUT_SECS=$((TIMEOUT * 60))
+
+      echo "Waiting up to ${TIMEOUT}m for ClusterDeployment ${CLUSTER_NAME} to be provisioned..."
+
+      oc wait clusterdeployment/"${CLUSTER_NAME}" \
+        -n "${CLUSTER_NAME}" \
+        --for=condition=Provisioned=True \
+        --timeout="${TIMEOUT_SECS}s"
+
+      echo "Cluster provisioned successfully"
+
+      # Extract admin kubeconfig
+      KUBECONFIG_SECRET=$(oc get clusterdeployment "${CLUSTER_NAME}" \
+        -n "${CLUSTER_NAME}" \
+        -o jsonpath='{.spec.clusterMetadata.adminKubeconfigSecretRef.name}' 2>/dev/null || echo "")
+
+      if [ -z "$KUBECONFIG_SECRET" ]; then
+        KUBECONFIG_SECRET="${CLUSTER_NAME}-0-admin-kubeconfig"
+      fi
+
+      echo "Extracting kubeconfig from secret ${KUBECONFIG_SECRET}"
+      oc get secret "${KUBECONFIG_SECRET}" \
+        -n "${CLUSTER_NAME}" \
+        -o jsonpath='{.data.kubeconfig}' | base64 -d > /workspace/kubeconfig/kubeconfig
+
+      # Extract admin password if available
+      PASSWORD_SECRET=$(oc get clusterdeployment "${CLUSTER_NAME}" \
+        -n "${CLUSTER_NAME}" \
+        -o jsonpath='{.spec.clusterMetadata.adminPasswordSecretRef.name}' 2>/dev/null || echo "")
+
+      if [ -n "$PASSWORD_SECRET" ]; then
+        oc get secret "${PASSWORD_SECRET}" \
+          -n "${CLUSTER_NAME}" \
+          -o jsonpath='{.data.password}' | base64 -d > /workspace/kubeconfig/admin-password 2>/dev/null || true
+      fi
+
+      # Print cluster info
+      API_URL=$(oc get clusterdeployment "${CLUSTER_NAME}" \
+        -n "${CLUSTER_NAME}" \
+        -o jsonpath='{.status.apiURL}' 2>/dev/null || echo "pending")
+      CONSOLE_URL=$(oc get clusterdeployment "${CLUSTER_NAME}" \
+        -n "${CLUSTER_NAME}" \
+        -o jsonpath='{.status.webConsoleURL}' 2>/dev/null || echo "pending")
+
+      echo "============================================"
+      echo "Cluster: ${CLUSTER_NAME}"
+      echo "API URL: ${API_URL}"
+      echo "Console: ${CONSOLE_URL}"
+      echo "Kubeconfig: /workspace/kubeconfig/kubeconfig"
+      echo "============================================"

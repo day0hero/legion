@@ -1,0 +1,569 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: perses-dashboards
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: perses
+data:
+  cluster-provisioning.json: |
+    {
+      "kind": "Dashboard",
+      "metadata": {
+        "name": "cluster-provisioning",
+        "project": "legion"
+      },
+      "spec": {
+        "display": {
+          "name": "Cluster Provisioning Overview"
+        },
+        "duration": "6h",
+        "refreshInterval": "30s",
+        "panels": {
+          "totalClusters": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Total clusters"
+              },
+              "plugin": {
+                "kind": "StatChart",
+                "spec": {
+                  "calculation": "last",
+                  "format": {
+                    "decimalPlaces": 0,
+                    "unit": "decimal"
+                  }
+                }
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "count(cluster:legion_provisioned:info) or sum(legion_clusters_total)"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "hiveClusters": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Hive clusters"
+              },
+              "plugin": {
+                "kind": "StatChart",
+                "spec": {
+                  "calculation": "last",
+                  "format": {
+                    "decimalPlaces": 0,
+                    "unit": "decimal"
+                  }
+                }
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_clusters_total{type=\"hive\"}"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "hypershiftClusters": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "HyperShift clusters"
+              },
+              "plugin": {
+                "kind": "StatChart",
+                "spec": {
+                  "calculation": "last",
+                  "format": {
+                    "decimalPlaces": 0,
+                    "unit": "decimal"
+                  }
+                }
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_clusters_total{type=\"hypershift\"}"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "failedPipelines": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Failed pipeline runs"
+              },
+              "plugin": {
+                "kind": "StatChart",
+                "spec": {
+                  "calculation": "last",
+                  "format": {
+                    "decimalPlaces": 0,
+                    "unit": "decimal"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "defaultColor": "#1b873f",
+                    "steps": [
+                      {
+                        "value": 1,
+                        "color": "#c9190b"
+                      }
+                    ]
+                  }
+                }
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_pipeline_runs_total{status=\"failed\"}"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "pipelineRunsOverTime": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Pipeline runs over time"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "sum(rate(tekton_pipelines_controller_pipelinerun_count[1h])) by (status)"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "pipelineRunDuration": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Pipeline run duration (p95)"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "histogram_quantile(0.95, sum(rate(tekton_pipelines_controller_pipelinerun_duration_seconds_bucket{pipeline=~\"deploy-.*\"}[1h])) by (le, pipeline))"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "clusterStatusHive": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Cluster status (Hive)"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_cluster_status{type=\"hive\"}"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "clusterStatusHypershift": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Cluster status (HyperShift)"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_cluster_status{type=\"hypershift\"}"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "nodeCountByCluster": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Node count by cluster"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_cluster_node_count"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "provisioningDuration": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Provisioning duration"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_cluster_provisioning_duration_minutes"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "hubCPU": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Hub CPU utilization"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_hub_node_cpu_utilization"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "hubMemory": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Hub memory utilization"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_hub_node_memory_utilization"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "hubNodes": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Hub node count by role"
+              },
+              "plugin": {
+                "kind": "TimeSeriesChart",
+                "spec": {}
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "legion_hub_node_count"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "hubPodsCapacity": {
+            "kind": "Panel",
+            "spec": {
+              "display": {
+                "name": "Hub pod capacity"
+              },
+              "plugin": {
+                "kind": "StatChart",
+                "spec": {
+                  "calculation": "last",
+                  "format": {
+                    "decimalPlaces": 0,
+                    "unit": "decimal"
+                  }
+                }
+              },
+              "queries": [
+                {
+                  "kind": "TimeSeriesQuery",
+                  "spec": {
+                    "plugin": {
+                      "kind": "PrometheusTimeSeriesQuery",
+                      "spec": {
+                        "query": "sum(kube_node_status_allocatable{resource=\"pods\"}) - sum(kube_pod_info)"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "layouts": [
+          {
+            "kind": "Grid",
+            "spec": {
+              "display": {
+                "title": "Summary stats",
+                "collapse": {
+                  "open": true
+                }
+              },
+              "items": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "width": 6,
+                  "height": 3,
+                  "content": {
+                    "$ref": "#/spec/panels/totalClusters"
+                  }
+                },
+                {
+                  "x": 6,
+                  "y": 0,
+                  "width": 6,
+                  "height": 3,
+                  "content": {
+                    "$ref": "#/spec/panels/hiveClusters"
+                  }
+                },
+                {
+                  "x": 12,
+                  "y": 0,
+                  "width": 6,
+                  "height": 3,
+                  "content": {
+                    "$ref": "#/spec/panels/hypershiftClusters"
+                  }
+                },
+                {
+                  "x": 18,
+                  "y": 0,
+                  "width": 6,
+                  "height": 3,
+                  "content": {
+                    "$ref": "#/spec/panels/failedPipelines"
+                  }
+                },
+                {
+                  "x": 0,
+                  "y": 3,
+                  "width": 12,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/pipelineRunsOverTime"
+                  }
+                },
+                {
+                  "x": 12,
+                  "y": 3,
+                  "width": 12,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/pipelineRunDuration"
+                  }
+                },
+                {
+                  "x": 0,
+                  "y": 9,
+                  "width": 12,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/clusterStatusHive"
+                  }
+                },
+                {
+                  "x": 12,
+                  "y": 9,
+                  "width": 12,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/clusterStatusHypershift"
+                  }
+                },
+                {
+                  "x": 0,
+                  "y": 15,
+                  "width": 12,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/nodeCountByCluster"
+                  }
+                },
+                {
+                  "x": 12,
+                  "y": 15,
+                  "width": 12,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/provisioningDuration"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "Grid",
+            "spec": {
+              "display": {
+                "title": "Hub cluster capacity",
+                "collapse": {
+                  "open": true
+                }
+              },
+              "items": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "width": 8,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/hubCPU"
+                  }
+                },
+                {
+                  "x": 8,
+                  "y": 0,
+                  "width": 8,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/hubMemory"
+                  }
+                },
+                {
+                  "x": 16,
+                  "y": 0,
+                  "width": 8,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/hubPodsCapacity"
+                  }
+                },
+                {
+                  "x": 0,
+                  "y": 6,
+                  "width": 24,
+                  "height": 6,
+                  "content": {
+                    "$ref": "#/spec/panels/hubNodes"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }

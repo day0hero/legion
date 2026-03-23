@@ -1,0 +1,32 @@
+pipelineNamespace: cluster-provisioning
+
+serviceAccount:
+  create: true
+  name: legion-provisioner
+  namespace: cluster-provisioning
+
+toolsImage: image-registry.openshift-image-registry.svc:5000/openshift/tools
+# Built by the hcp-cli chart — ImageStream with lookupPolicy.local: true
+hcpImage: hcp-cli:latest
+
+externalSecrets:
+  secretStore:
+    name: vault-backend
+    kind: ClusterSecretStore
+  awsCreds:
+    key: secret/data/hub/aws
+  gcpCreds:
+    key: secret/data/hub/gcp
+  azureCreds:
+    key: secret/data/hub/azure
+  pullSecret:
+    key: pushsecrets/global-pull-secret
+
+hypershift:
+  defaultReplicas: 2
+  defaultInstanceType: m5.xlarge
+  baseDomain: ""
+
+hive:
+  defaultControlPlaneReplicas: "3"
+  defaultWorkerReplicas: "3"

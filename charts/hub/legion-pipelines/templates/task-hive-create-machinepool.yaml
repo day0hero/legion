@@ -1,0 +1,58 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hive-create-machinepool
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Create an AWS MachinePool for Hive worker nodes (no-op on other clouds).
+  params:
+    - name: cluster-name
+      type: string
+    - name: cloud-provider
+      type: string
+    - name: worker-replicas
+      type: string
+      default: "3"
+    - name: worker-machine-type
+      type: string
+  steps:
+    - name: apply-machinepool
+      image: {{ .Values.toolsImage | quote }}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        CLUSTER_NAME="$(params.cluster-name)"
+        CLOUD_PROVIDER="$(params.cloud-provider)"
+        WORKER_REPLICAS="$(params.worker-replicas)"
+        WORKER_TYPE="$(params.worker-machine-type)"
+
+        PROVIDER="$(echo "${CLOUD_PROVIDER}" | tr '[:upper:]' '[:lower:]')"
+        case "${PROVIDER}" in
+          aws|amazon)
+            ;;
+          *)
+            echo "skipping MachinePool (provider is not AWS)"
+            exit 0
+            ;;
+        esac
+
+        cat <<EOF | oc apply -f -
+        apiVersion: hive.openshift.io/v1
+        kind: MachinePool
+        metadata:
+          name: ${CLUSTER_NAME}-worker
+          namespace: ${CLUSTER_NAME}
+        spec:
+          clusterDeploymentRef:
+            name: ${CLUSTER_NAME}
+          name: worker
+          replicas: ${WORKER_REPLICAS}
+          platform:
+            aws:
+              rootVolume:
+                size: 200
+                type: gp3
+              type: ${WORKER_TYPE}
+        EOF

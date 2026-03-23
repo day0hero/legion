@@ -1,0 +1,17 @@
+{{- if .Values.internalCA.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.internalCA.name }}
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: {{ .Values.internalCA.commonName | quote }}
+  duration: {{ .Values.internalCA.duration | quote }}
+  renewBefore: {{ .Values.internalCA.renewBefore | quote }}
+  secretName: {{ .Values.internalCA.secretName }}
+  issuerRef:
+    name: {{ .Values.internalCA.issuerRef }}
+    kind: ClusterIssuer
+    group: cert-manager.io
+{{- end }}

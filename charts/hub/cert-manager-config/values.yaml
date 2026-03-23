@@ -1,0 +1,39 @@
+clusterIssuers:
+  selfSigned:
+    enabled: true
+    name: selfsigned-issuer
+
+  letsEncrypt:
+    enabled: false
+    name: letsencrypt-prod
+    email: ""
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef: letsencrypt-prod-key
+    # solvers: http01 with ingress class openshift-default
+    solvers:
+    - http01:
+        ingress:
+          ingressClassName: openshift-default
+
+  letsEncryptStaging:
+    enabled: false
+    name: letsencrypt-staging
+    email: ""
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef: letsencrypt-staging-key
+    solvers:
+    - http01:
+        ingress:
+          ingressClassName: openshift-default
+
+# Internal CA — uses self-signed issuer to bootstrap a CA, then issues certs from it
+internalCA:
+  enabled: true
+  name: legion-internal-ca
+  issuerRef: selfsigned-issuer
+  secretName: legion-ca-key-pair
+  commonName: "Legion Internal CA"
+  duration: 87600h    # 10 years
+  renewBefore: 720h   # 30 days
+
+certificates: []

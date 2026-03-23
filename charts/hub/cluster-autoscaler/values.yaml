@@ -1,0 +1,33 @@
+clusterAutoscaler:
+  enabled: true
+  # Resource limits for autoscaler decisions across the entire cluster
+  resourceLimits:
+    maxNodesTotal: 15
+    cores:
+      min: 24
+      max: 192
+    memory:
+      min: 96
+      max: 768
+  scaleDown:
+    enabled: true
+    # How long a node must be underutilized before it's eligible for removal
+    delayAfterAdd: 10m
+    delayAfterDelete: 5m
+    delayAfterFailure: 3m
+    unneededTime: 10m
+    # Node utilization threshold — scale down if below this
+    utilizationThreshold: "0.5"
+  # Balance similar node groups to keep sizes even
+  balanceSimilarNodeGroups: true
+  # Skip nodes with local storage (pipeline PVCs)
+  skipNodesWithLocalStorage: true
+  logVerbosity: 4
+
+machineAutoscalers:
+- name: worker
+  # Must match an existing MachineSet name in openshift-machine-api
+  # Typically: <cluster-infra-id>-worker-<az>
+  machineSetName: ""
+  minReplicas: 3
+  maxReplicas: 12

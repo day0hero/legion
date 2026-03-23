@@ -1,0 +1,19 @@
+{{- if .Values.perses.route.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: perses
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: perses
+spec:
+  to:
+    kind: Service
+    name: perses
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+{{- end }}

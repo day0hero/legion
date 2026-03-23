@@ -1,0 +1,107 @@
+clusterGroup:
+  name: hub
+  isHubCluster: true
+
+  namespaces:
+    - open-cluster-management
+    - vault
+    - golang-external-secrets
+    - openshift-pipelines
+    - cluster-provisioning
+    - cert-manager-operator
+    - legion-monitoring
+
+  subscriptions:
+    acm:
+      name: advanced-cluster-management
+      namespace: open-cluster-management
+      channel: release-2.16
+
+    openshift-pipelines:
+      name: openshift-pipelines-operator-rh
+      channel: latest
+
+    cert-manager:
+      name: openshift-cert-manager-operator
+      namespace: cert-manager-operator
+      source: redhat-operators
+      channel: stable-v1
+
+  argoProjects:
+    - hub
+    - infrastructure
+
+  applications:
+    acm:
+      name: acm
+      namespace: open-cluster-management
+      argoProject: hub
+      chart: acm
+      chartVersion: 0.1.*
+
+    vault:
+      name: vault
+      namespace: vault
+      argoProject: hub
+      chart: hashicorp-vault
+      chartVersion: 0.1.*
+
+    golang-external-secrets:
+      name: golang-external-secrets
+      namespace: golang-external-secrets
+      argoProject: hub
+      chart: golang-external-secrets
+      chartVersion: 0.1.*
+
+    legion-credentials:
+      name: legion-credentials
+      namespace: cluster-provisioning
+      argoProject: infrastructure
+      path: charts/hub/legion-credentials
+
+    hcp-cli:
+      name: hcp-cli
+      namespace: cluster-provisioning
+      argoProject: infrastructure
+      path: charts/hub/hcp-cli
+
+    legion-pipelines:
+      name: legion-pipelines
+      namespace: cluster-provisioning
+      argoProject: infrastructure
+      path: charts/hub/legion-pipelines
+
+    cert-manager-config:
+      name: cert-manager-config
+      namespace: cert-manager
+      argoProject: infrastructure
+      path: charts/hub/cert-manager-config
+
+    legion-monitoring:
+      name: legion-monitoring
+      namespace: legion-monitoring
+      argoProject: infrastructure
+      path: charts/hub/legion-monitoring
+
+    cluster-autoscaler:
+      name: cluster-autoscaler
+      namespace: openshift-machine-api
+      argoProject: infrastructure
+      path: charts/hub/cluster-autoscaler
+
+  imperative:
+    namespace: imperative
+    jobs:
+    - name: hello-world
+      playbook: rhvp.cluster_utils.hello_world
+      timeout: 234
+
+  managedClusterGroups:
+    provisionedClusters:
+      name: provisioned
+      acmlabels:
+      - name: clusterGroup
+        value: provisioned
+      helmOverrides:
+      - name: clusterGroup.isHubCluster
+        value: false

@@ -1,0 +1,76 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hypershift-wait-ready
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Waits for a HyperShift HostedCluster to become available and extracts credentials
+  params:
+  - name: cluster-name
+    type: string
+  - name: timeout-minutes
+    type: string
+    default: "30"
+  workspaces:
+  - name: kubeconfig
+  steps:
+  - name: wait-and-extract
+    image: {{ .Values.toolsImage }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      CLUSTER_NAME=$(params.cluster-name)
+      TIMEOUT=$(params.timeout-minutes)
+      TIMEOUT_SECS=$((TIMEOUT * 60))
+
+      echo "Waiting up to ${TIMEOUT}m for HostedCluster ${CLUSTER_NAME} to become available..."
+
+      oc wait hostedcluster/"${CLUSTER_NAME}" \
+        -n clusters \
+        --for=condition=Available=True \
+        --timeout="${TIMEOUT_SECS}s"
+
+      echo "HostedCluster ${CLUSTER_NAME} is available"
+
+      # Extract kubeconfig using hcp CLI or from secret
+      KUBECONFIG_SECRET="${CLUSTER_NAME}-admin-kubeconfig"
+      NAMESPACE="clusters-${CLUSTER_NAME}"
+
+      if oc get secret "${KUBECONFIG_SECRET}" -n "${NAMESPACE}" &>/dev/null; then
+        echo "Extracting kubeconfig from secret ${KUBECONFIG_SECRET} in ${NAMESPACE}"
+        oc get secret "${KUBECONFIG_SECRET}" \
+          -n "${NAMESPACE}" \
+          -o jsonpath='{.data.kubeconfig}' | base64 -d > /workspace/kubeconfig/kubeconfig
+      elif oc get secret "${CLUSTER_NAME}-admin-kubeconfig" -n clusters &>/dev/null; then
+        echo "Extracting kubeconfig from clusters namespace"
+        oc get secret "${CLUSTER_NAME}-admin-kubeconfig" \
+          -n clusters \
+          -o jsonpath='{.data.kubeconfig}' | base64 -d > /workspace/kubeconfig/kubeconfig
+      else
+        echo "WARNING: Could not find kubeconfig secret, attempting hcp create kubeconfig"
+        hcp create kubeconfig --name "${CLUSTER_NAME}" --namespace clusters > /workspace/kubeconfig/kubeconfig || true
+      fi
+
+      # Extract admin password
+      PASSWORD_SECRET="clusters-${CLUSTER_NAME}-kubeadmin-password"
+      if oc get secret "${PASSWORD_SECRET}" -n "${NAMESPACE}" &>/dev/null; then
+        oc get secret "${PASSWORD_SECRET}" \
+          -n "${NAMESPACE}" \
+          -o jsonpath='{.data.password}' | base64 -d > /workspace/kubeconfig/admin-password 2>/dev/null || true
+      fi
+
+      # Print cluster info
+      API_URL=$(oc get hostedcluster "${CLUSTER_NAME}" \
+        -n clusters \
+        -o jsonpath='{.status.controlPlaneEndpoint.host}' 2>/dev/null || echo "pending")
+      CONSOLE_URL="https://console-openshift-console.apps.${CLUSTER_NAME}.$(oc get hostedcluster ${CLUSTER_NAME} -n clusters -o jsonpath='{.spec.dns.baseDomain}' 2>/dev/null || echo 'unknown')"
+
+      echo "============================================"
+      echo "Cluster: ${CLUSTER_NAME}"
+      echo "API URL: ${API_URL}"
+      echo "Console: ${CONSOLE_URL}"
+      echo "Kubeconfig: /workspace/kubeconfig/kubeconfig"
+      echo "============================================"

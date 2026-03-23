@@ -1,0 +1,42 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: create-managed-cluster
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Creates a ManagedCluster resource for ACM
+  params:
+  - name: cluster-name
+    type: string
+  - name: cluster-group
+    type: string
+    default: "provisioned"
+  steps:
+  - name: create-managed-cluster
+    image: {{ .Values.toolsImage }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      CLUSTER_NAME=$(params.cluster-name)
+      CLUSTER_GROUP=$(params.cluster-group)
+
+      cat <<EOF | oc apply -f -
+      apiVersion: cluster.open-cluster-management.io/v1
+      kind: ManagedCluster
+      metadata:
+        name: ${CLUSTER_NAME}
+        labels:
+          name: ${CLUSTER_NAME}
+          vendor: OpenShift
+          cloud: auto-detect
+          clusterGroup: ${CLUSTER_GROUP}
+          cluster.open-cluster-management.io/clusterset: default
+      spec:
+        hubAcceptsClient: true
+        leaseDurationSeconds: 60
+      EOF
+
+      echo "ManagedCluster ${CLUSTER_NAME} created"

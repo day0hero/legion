@@ -1,0 +1,146 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hive-create-cluster-deployment
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Apply a Hive ClusterDeployment for the target cluster.
+  params:
+    - name: cluster-name
+      type: string
+    - name: base-domain
+      type: string
+    - name: cloud-provider
+      type: string
+    - name: cloud-region
+      type: string
+    - name: cluster-version
+      type: string
+      default: "img4.17.0-x86-64-appsub"
+    - name: azure-resource-group
+      type: string
+      default: ""
+  steps:
+    - name: apply-cluster-deployment
+      image: {{ .Values.toolsImage | quote }}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        CLUSTER_NAME="$(params.cluster-name)"
+        BASE_DOMAIN="$(params.base-domain)"
+        CLOUD_PROVIDER="$(params.cloud-provider)"
+        CLOUD_REGION="$(params.cloud-region)"
+        CLUSTER_VERSION="$(params.cluster-version)"
+        AZ_RG="$(params.azure-resource-group)"
+
+        PROVIDER="$(echo "${CLOUD_PROVIDER}" | tr '[:upper:]' '[:lower:]')"
+        case "${PROVIDER}" in
+          aws|amazon)
+            CLOUD_LABEL="AWS"
+            ;;
+          gcp|google)
+            CLOUD_LABEL="GCP"
+            ;;
+          azure)
+            CLOUD_LABEL="Azure"
+            ;;
+          *)
+            echo "unsupported cloud-provider: ${CLOUD_PROVIDER}" >&2
+            exit 1
+            ;;
+        esac
+
+        case "${PROVIDER}" in
+          aws|amazon)
+            cat <<EOF | oc apply -f -
+        apiVersion: hive.openshift.io/v1
+        kind: ClusterDeployment
+        metadata:
+          name: ${CLUSTER_NAME}
+          namespace: ${CLUSTER_NAME}
+          labels:
+            cloud: ${CLOUD_LABEL}
+            region: ${CLOUD_REGION}
+            vendor: OpenShift
+            cluster.open-cluster-management.io/clusterset: default
+        spec:
+          clusterName: ${CLUSTER_NAME}
+          baseDomain: ${BASE_DOMAIN}
+          installAttemptsLimit: 1
+          platform:
+            aws:
+              credentialsSecretRef:
+                name: aws-creds
+              region: ${CLOUD_REGION}
+          provisioning:
+            installConfigSecretRef:
+              name: ${CLUSTER_NAME}-install-config
+            imageSetRef:
+              name: ${CLUSTER_VERSION}
+          pullSecretRef:
+            name: global-pullsecret
+        EOF
+            ;;
+          gcp|google)
+            cat <<EOF | oc apply -f -
+        apiVersion: hive.openshift.io/v1
+        kind: ClusterDeployment
+        metadata:
+          name: ${CLUSTER_NAME}
+          namespace: ${CLUSTER_NAME}
+          labels:
+            cloud: ${CLOUD_LABEL}
+            region: ${CLOUD_REGION}
+            vendor: OpenShift
+            cluster.open-cluster-management.io/clusterset: default
+        spec:
+          clusterName: ${CLUSTER_NAME}
+          baseDomain: ${BASE_DOMAIN}
+          installAttemptsLimit: 1
+          platform:
+            gcp:
+              credentialsSecretRef:
+                name: gcp-creds
+          provisioning:
+            installConfigSecretRef:
+              name: ${CLUSTER_NAME}-install-config
+            imageSetRef:
+              name: ${CLUSTER_VERSION}
+          pullSecretRef:
+            name: global-pullsecret
+        EOF
+            ;;
+          azure)
+            cat <<EOF | oc apply -f -
+        apiVersion: hive.openshift.io/v1
+        kind: ClusterDeployment
+        metadata:
+          name: ${CLUSTER_NAME}
+          namespace: ${CLUSTER_NAME}
+          labels:
+            cloud: ${CLOUD_LABEL}
+            region: ${CLOUD_REGION}
+            vendor: OpenShift
+            cluster.open-cluster-management.io/clusterset: default
+        spec:
+          clusterName: ${CLUSTER_NAME}
+          baseDomain: ${BASE_DOMAIN}
+          installAttemptsLimit: 1
+          platform:
+            azure:
+              credentialsSecretRef:
+                name: azure-creds
+              baseDomainResourceGroupName: ${AZ_RG}
+              cloudName: AzurePublicCloud
+          provisioning:
+            installConfigSecretRef:
+              name: ${CLUSTER_NAME}-install-config
+            imageSetRef:
+              name: ${CLUSTER_VERSION}
+          pullSecretRef:
+            name: global-pullsecret
+        EOF
+            ;;
+        esac

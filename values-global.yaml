@@ -1,0 +1,13 @@
+global:
+  pattern: legion
+  options:
+    useCSV: false
+    syncPolicy: Automatic
+    installPlanApproval: Automatic
+  secretLoader:
+    disabled: false
+main:
+  clusterGroupName: hub
+  multiSourceConfig:
+    enabled: true
+    clusterGroupChartVersion: 0.9.*

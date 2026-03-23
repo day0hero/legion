@@ -1,0 +1,43 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: {{ .Values.buildConfig.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  {{- if .Values.buildConfig.schedule }}
+  triggers:
+  - type: ConfigChange
+  - type: Cron
+    cron:
+      schedule: {{ .Values.buildConfig.schedule | quote }}
+  {{- else }}
+  triggers:
+  - type: ConfigChange
+  {{- end }}
+  runPolicy: Serial
+  serviceAccount: {{ .Values.serviceAccount.name }}
+  source:
+    type: Dockerfile
+    dockerfile: |
+      FROM {{ .Values.buildConfig.baseImage }} AS base
+
+      # Resolve the hcp download URL from ConsoleCLIDownload at build time
+      # The build SA has RBAC to GET consoleclidownloads
+      USER root
+      RUN HCP_URL=$(oc get consoleclidownload {{ .Values.buildConfig.consoleCLIDownload }} \
+            -o jsonpath='{range .spec.links[*]}{.href}{"\t"}{.text}{"\n"}{end}' \
+            | grep -i 'linux' | grep -i 'amd64\|x86_64' | head -1 | awk '{print $1}') && \
+          echo "Downloading hcp from: ${HCP_URL}" && \
+          curl -sSL "${HCP_URL}" -o /tmp/hcp.tar.gz && \
+          tar xzf /tmp/hcp.tar.gz -C /usr/local/bin && \
+          chmod +x /usr/local/bin/hcp && \
+          rm -f /tmp/hcp.tar.gz && \
+          hcp version
+  strategy:
+    type: Docker
+    dockerStrategy:
+      noCache: true
+  output:
+    to:
+      kind: ImageStreamTag
+      name: {{ .Values.imageStream.name }}:latest

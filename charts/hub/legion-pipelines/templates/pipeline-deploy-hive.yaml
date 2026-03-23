@@ -1,0 +1,222 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: deploy-hive-cluster
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Provision a Hive/OpenShift cluster and register it with ACM.
+  params:
+    - name: cluster-name
+      type: string
+    - name: base-domain
+      type: string
+    - name: cloud-provider
+      type: string
+    - name: cloud-region
+      type: string
+    - name: cluster-version
+      type: string
+      default: "img4.17.0-x86-64-appsub"
+    - name: cluster-group
+      type: string
+      default: "provisioned"
+    - name: control-plane-replicas
+      type: string
+      default: "3"
+    - name: control-plane-machine-type
+      type: string
+    - name: worker-replicas
+      type: string
+      default: "3"
+    - name: worker-machine-type
+      type: string
+    - name: azure-resource-group
+      type: string
+      default: ""
+    - name: gcp-project-id
+      type: string
+      default: ""
+    - name: ssh-public-key
+      type: string
+      default: ""
+    - name: secret-store-name
+      type: string
+      default: "vault-backend"
+    - name: aws-creds-key-path
+      type: string
+      default: "secret/data/hub/aws"
+    - name: gcp-creds-key-path
+      type: string
+      default: "secret/data/hub/gcp"
+    - name: azure-creds-key-path
+      type: string
+      default: "secret/data/hub/azure"
+    - name: pullsecret-key-path
+      type: string
+      default: "pushsecrets/global-pull-secret"
+    - name: timeout-minutes
+      type: string
+      default: "90"
+  workspaces:
+    - name: install-config
+    - name: kubeconfig
+  tasks:
+    - name: create-namespace
+      taskRef:
+        name: create-namespace
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+
+    - name: create-externalsecrets
+      runAfter:
+        - create-namespace
+      taskRef:
+        name: create-externalsecrets
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: cloud-provider
+          value: $(params.cloud-provider)
+        - name: secret-store-name
+          value: $(params.secret-store-name)
+        - name: aws-creds-key-path
+          value: $(params.aws-creds-key-path)
+        - name: gcp-creds-key-path
+          value: $(params.gcp-creds-key-path)
+        - name: azure-creds-key-path
+          value: $(params.azure-creds-key-path)
+        - name: pullsecret-key-path
+          value: $(params.pullsecret-key-path)
+
+    - name: hive-create-install-config
+      runAfter:
+        - create-externalsecrets
+      taskRef:
+        name: hive-create-install-config
+      workspaces:
+        - name: install-config
+          workspace: install-config
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: base-domain
+          value: $(params.base-domain)
+        - name: cloud-provider
+          value: $(params.cloud-provider)
+        - name: cloud-region
+          value: $(params.cloud-region)
+        - name: control-plane-replicas
+          value: $(params.control-plane-replicas)
+        - name: control-plane-machine-type
+          value: $(params.control-plane-machine-type)
+        - name: worker-replicas
+          value: $(params.worker-replicas)
+        - name: worker-machine-type
+          value: $(params.worker-machine-type)
+        - name: azure-resource-group
+          value: $(params.azure-resource-group)
+        - name: gcp-project-id
+          value: $(params.gcp-project-id)
+        - name: ssh-public-key
+          value: $(params.ssh-public-key)
+
+    - name: hive-create-cluster-deployment
+      runAfter:
+        - hive-create-install-config
+      taskRef:
+        name: hive-create-cluster-deployment
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: base-domain
+          value: $(params.base-domain)
+        - name: cloud-provider
+          value: $(params.cloud-provider)
+        - name: cloud-region
+          value: $(params.cloud-region)
+        - name: cluster-version
+          value: $(params.cluster-version)
+        - name: azure-resource-group
+          value: $(params.azure-resource-group)
+
+    - name: hive-create-machinepool
+      runAfter:
+        - hive-create-cluster-deployment
+      taskRef:
+        name: hive-create-machinepool
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: cloud-provider
+          value: $(params.cloud-provider)
+        - name: worker-replicas
+          value: $(params.worker-replicas)
+        - name: worker-machine-type
+          value: $(params.worker-machine-type)
+
+    - name: hive-wait-cluster-ready
+      runAfter:
+        - hive-create-machinepool
+      taskRef:
+        name: hive-wait-cluster-ready
+      workspaces:
+        - name: kubeconfig
+          workspace: kubeconfig
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: timeout-minutes
+          value: $(params.timeout-minutes)
+
+    - name: validate-cluster
+      runAfter:
+        - hive-wait-cluster-ready
+      taskRef:
+        name: validate-cluster
+      workspaces:
+        - name: kubeconfig
+          workspace: kubeconfig
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: cluster-type
+          value: "hive"
+        - name: run-smoke-test
+          value: "true"
+
+    - name: create-managed-cluster
+      runAfter:
+        - validate-cluster
+      taskRef:
+        name: create-managed-cluster
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: cluster-group
+          value: $(params.cluster-group)
+
+    - name: create-import-secret
+      runAfter:
+        - create-managed-cluster
+      taskRef:
+        name: create-import-secret
+      workspaces:
+        - name: kubeconfig
+          workspace: kubeconfig
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+
+    - name: create-klusterlet-addon
+      runAfter:
+        - create-import-secret
+      taskRef:
+        name: create-klusterlet-addon
+      params:
+        - name: cluster-name
+          value: $(params.cluster-name)
+        - name: cluster-group
+          value: $(params.cluster-group)

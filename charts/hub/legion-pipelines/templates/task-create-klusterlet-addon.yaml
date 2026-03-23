@@ -1,0 +1,45 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: create-klusterlet-addon
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Creates KlusterletAddonConfig with core ACM add-ons enabled
+  params:
+  - name: cluster-name
+    type: string
+  - name: cluster-group
+    type: string
+    default: provisioned
+  steps:
+  - name: create-klusterlet-addon
+    image: {{ .Values.toolsImage | quote }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      NAME="$(params.cluster-name)"
+      GROUP="$(params.cluster-group)"
+      cat <<EOF | oc apply -f -
+      apiVersion: agent.open-cluster-management.io/v1
+      kind: KlusterletAddonConfig
+      metadata:
+        name: ${NAME}
+        namespace: ${NAME}
+        labels:
+          clusterGroup: ${GROUP}
+      spec:
+        clusterName: ${NAME}
+        clusterNamespace: ${NAME}
+        applicationManager:
+          enabled: true
+        policyController:
+          enabled: true
+        searchCollector:
+          enabled: true
+        certPolicyController:
+          enabled: true
+        iamPolicyController:
+          enabled: true
+      EOF

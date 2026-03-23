@@ -1,0 +1,16 @@
+# Example HyperShift cluster request for AWS
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hypershift-aws-example
+  namespace: cluster-provisioning
+  labels:
+    legion.io/type: cluster-request
+data:
+  type: hypershift
+  cluster-name: my-hypershift-cluster
+  base-domain: example.com
+  cloud-region: us-east-2
+  node-pool-replicas: "2"
+  instance-type: m5.xlarge
+  release-image: ""

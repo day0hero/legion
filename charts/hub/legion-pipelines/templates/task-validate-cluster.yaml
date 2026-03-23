@@ -1,0 +1,316 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: validate-cluster
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: >
+    Validates a provisioned cluster is healthy and operational.
+    Runs tiered checks: API health, ClusterOperators, nodes, networking, and an optional workload smoke test.
+  params:
+  - name: cluster-name
+    type: string
+  - name: cluster-type
+    description: "hive or hypershift — used for hub-side resource checks"
+    type: string
+    default: "hive"
+  - name: expected-nodes
+    description: "Expected number of Ready nodes (0 to skip check)"
+    type: string
+    default: "0"
+  - name: run-smoke-test
+    description: "Deploy hello-openshift and curl the route as a workload smoke test"
+    type: string
+    default: "true"
+  - name: timeout-seconds
+    description: "Per-check timeout for oc wait commands"
+    type: string
+    default: "300"
+  workspaces:
+  - name: kubeconfig
+  steps:
+  - name: validate
+    image: {{ .Values.toolsImage }}
+    env:
+    - name: KUBECONFIG
+      value: /workspace/kubeconfig/kubeconfig
+    script: |
+      #!/bin/bash
+      set -uo pipefail
+
+      CLUSTER_NAME=$(params.cluster-name)
+      CLUSTER_TYPE=$(params.cluster-type)
+      EXPECTED_NODES=$(params.expected-nodes)
+      SMOKE_TEST=$(params.run-smoke-test)
+      TIMEOUT=$(params.timeout-seconds)
+
+      PASS=0
+      FAIL=0
+      WARN=0
+
+      pass() { echo "  [PASS] $1"; PASS=$((PASS + 1)); }
+      fail() { echo "  [FAIL] $1"; FAIL=$((FAIL + 1)); }
+      warn() { echo "  [WARN] $1"; WARN=$((WARN + 1)); }
+
+      echo "============================================"
+      echo "Cluster Validation: ${CLUSTER_NAME}"
+      echo "Type: ${CLUSTER_TYPE}"
+      echo "============================================"
+
+      # ── Tier 1: API Reachable ──────────────────────
+      echo ""
+      echo "── Tier 1: API Health ──"
+
+      if oc cluster-info &>/dev/null; then
+        pass "API server reachable"
+      else
+        fail "API server unreachable"
+      fi
+
+      if oc get --raw /healthz 2>/dev/null | grep -q "ok"; then
+        pass "/healthz returns ok"
+      else
+        fail "/healthz check failed"
+      fi
+
+      if oc whoami &>/dev/null; then
+        pass "Authentication works ($(oc whoami))"
+      else
+        fail "Authentication failed"
+      fi
+
+      # ── Tier 2: Core Components ────────────────────
+      echo ""
+      echo "── Tier 2: Core Components ──"
+
+      CV=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null || echo "")
+      if [ -n "$CV" ]; then
+        pass "ClusterVersion: ${CV}"
+      else
+        fail "Could not retrieve ClusterVersion"
+      fi
+
+      CV_AVAILABLE=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "")
+      if [ "$CV_AVAILABLE" = "True" ]; then
+        pass "ClusterVersion Available=True"
+      else
+        fail "ClusterVersion Available=${CV_AVAILABLE:-unknown}"
+      fi
+
+      DEGRADED_COS=$(oc get clusteroperators -o json 2>/dev/null | \
+        jq -r '.items[] | select(.status.conditions[] | select(.type=="Degraded" and .status=="True")) | .metadata.name' 2>/dev/null || echo "")
+      if [ -z "$DEGRADED_COS" ]; then
+        pass "No ClusterOperators degraded"
+      else
+        for co in $DEGRADED_COS; do
+          fail "ClusterOperator degraded: ${co}"
+        done
+      fi
+
+      UNAVAILABLE_COS=$(oc get clusteroperators -o json 2>/dev/null | \
+        jq -r '.items[] | select(.status.conditions[] | select(.type=="Available" and .status=="False")) | .metadata.name' 2>/dev/null || echo "")
+      if [ -z "$UNAVAILABLE_COS" ]; then
+        pass "All ClusterOperators available"
+      else
+        for co in $UNAVAILABLE_COS; do
+          fail "ClusterOperator unavailable: ${co}"
+        done
+      fi
+
+      TOTAL_NODES=$(oc get nodes --no-headers 2>/dev/null | wc -l)
+      READY_NODES=$(oc get nodes --no-headers 2>/dev/null | grep -c " Ready" || echo "0")
+      NOT_READY=$((TOTAL_NODES - READY_NODES))
+
+      if [ "$TOTAL_NODES" -gt 0 ]; then
+        pass "Nodes found: ${READY_NODES}/${TOTAL_NODES} Ready"
+      else
+        fail "No nodes found"
+      fi
+
+      if [ "$NOT_READY" -gt 0 ]; then
+        fail "${NOT_READY} node(s) not Ready"
+      fi
+
+      if [ "$EXPECTED_NODES" -gt 0 ]; then
+        if [ "$READY_NODES" -eq "$EXPECTED_NODES" ]; then
+          pass "Node count matches expected: ${EXPECTED_NODES}"
+        else
+          fail "Expected ${EXPECTED_NODES} Ready nodes, got ${READY_NODES}"
+        fi
+      fi
+
+      # ── Tier 3: Networking & Ingress ───────────────
+      echo ""
+      echo "── Tier 3: Networking & Ingress ──"
+
+      CONSOLE_URL=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+      if [ -n "$CONSOLE_URL" ]; then
+        HTTP_CODE=$(curl -skL -o /dev/null -w '%{http_code}' "https://${CONSOLE_URL}" --connect-timeout 10 2>/dev/null || echo "000")
+        if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+          pass "Console route reachable (HTTP ${HTTP_CODE})"
+        else
+          warn "Console route returned HTTP ${HTTP_CODE}"
+        fi
+      else
+        warn "Console route not found"
+      fi
+
+      OAUTH_URL=$(oc get route oauth-openshift -n openshift-authentication -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+      if [ -n "$OAUTH_URL" ]; then
+        OAUTH_CODE=$(curl -skL -o /dev/null -w '%{http_code}' "https://${OAUTH_URL}/healthz" --connect-timeout 10 2>/dev/null || echo "000")
+        if [ "$OAUTH_CODE" -ge 200 ] && [ "$OAUTH_CODE" -lt 400 ]; then
+          pass "OAuth endpoint healthy (HTTP ${OAUTH_CODE})"
+        else
+          warn "OAuth endpoint returned HTTP ${OAUTH_CODE}"
+        fi
+      else
+        warn "OAuth route not found"
+      fi
+
+      # ── Tier 4: Workload Smoke Test ────────────────
+      if [ "$SMOKE_TEST" = "true" ]; then
+        echo ""
+        echo "── Tier 4: Workload Smoke Test ──"
+
+        SMOKE_NS="legion-smoke-test"
+        oc new-project "${SMOKE_NS}" --skip-config-write &>/dev/null 2>&1 || \
+          oc create namespace "${SMOKE_NS}" &>/dev/null 2>&1 || true
+
+        cat <<EOF | oc apply -n "${SMOKE_NS}" -f - 2>/dev/null
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: hello-openshift
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: hello-openshift
+        template:
+          metadata:
+            labels:
+              app: hello-openshift
+          spec:
+            containers:
+            - name: hello
+              image: quay.io/openshift/origin-hello-openshift:latest
+              ports:
+              - containerPort: 8080
+      ---
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: hello-openshift
+      spec:
+        selector:
+          app: hello-openshift
+        ports:
+        - port: 8080
+          targetPort: 8080
+      EOF
+
+        oc expose service hello-openshift -n "${SMOKE_NS}" &>/dev/null 2>&1 || true
+
+        echo "  Waiting for deployment rollout..."
+        if oc rollout status deployment/hello-openshift -n "${SMOKE_NS}" --timeout="${TIMEOUT}s" &>/dev/null; then
+          pass "Deployment rolled out successfully"
+        else
+          fail "Deployment rollout timed out"
+        fi
+
+        ROUTE_HOST=$(oc get route hello-openshift -n "${SMOKE_NS}" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+        if [ -n "$ROUTE_HOST" ]; then
+          RETRIES=0
+          SMOKE_OK=false
+          while [ $RETRIES -lt 12 ]; do
+            SMOKE_CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://${ROUTE_HOST}" --connect-timeout 5 2>/dev/null || echo "000")
+            if [ "$SMOKE_CODE" -ge 200 ] && [ "$SMOKE_CODE" -lt 400 ]; then
+              SMOKE_OK=true
+              break
+            fi
+            RETRIES=$((RETRIES + 1))
+            sleep 5
+          done
+          if [ "$SMOKE_OK" = "true" ]; then
+            pass "Smoke test route responds (HTTP ${SMOKE_CODE})"
+          else
+            fail "Smoke test route not reachable after 60s (last HTTP ${SMOKE_CODE})"
+          fi
+        else
+          fail "Could not create smoke test route"
+        fi
+
+        echo "  Cleaning up smoke test resources..."
+        oc delete namespace "${SMOKE_NS}" --wait=false &>/dev/null 2>&1 || true
+      fi
+
+      # ── Hub-side checks ────────────────────────────
+      echo ""
+      echo "── Hub-Side Resource Checks ──"
+      echo "  (using hub kubeconfig from service account)"
+
+      unset KUBECONFIG
+
+      if [ "$CLUSTER_TYPE" = "hive" ]; then
+        PROVISIONED=$(oc get clusterdeployment "${CLUSTER_NAME}" \
+          -n "${CLUSTER_NAME}" \
+          -o jsonpath='{.status.conditions[?(@.type=="Provisioned")].status}' 2>/dev/null || echo "")
+        if [ "$PROVISIONED" = "True" ]; then
+          pass "ClusterDeployment Provisioned=True"
+        else
+          fail "ClusterDeployment Provisioned=${PROVISIONED:-unknown}"
+        fi
+
+        UNREACHABLE=$(oc get clusterdeployment "${CLUSTER_NAME}" \
+          -n "${CLUSTER_NAME}" \
+          -o jsonpath='{.status.conditions[?(@.type=="Unreachable")].status}' 2>/dev/null || echo "")
+        if [ "$UNREACHABLE" = "False" ]; then
+          pass "ClusterDeployment Unreachable=False"
+        else
+          warn "ClusterDeployment Unreachable=${UNREACHABLE:-unknown}"
+        fi
+      elif [ "$CLUSTER_TYPE" = "hypershift" ]; then
+        HC_AVAILABLE=$(oc get hostedcluster "${CLUSTER_NAME}" \
+          -n clusters \
+          -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "")
+        if [ "$HC_AVAILABLE" = "True" ]; then
+          pass "HostedCluster Available=True"
+        else
+          fail "HostedCluster Available=${HC_AVAILABLE:-unknown}"
+        fi
+
+        HC_DEGRADED=$(oc get hostedcluster "${CLUSTER_NAME}" \
+          -n clusters \
+          -o jsonpath='{.status.conditions[?(@.type=="Degraded")].status}' 2>/dev/null || echo "")
+        if [ "$HC_DEGRADED" = "False" ]; then
+          pass "HostedCluster Degraded=False"
+        else
+          warn "HostedCluster Degraded=${HC_DEGRADED:-unknown}"
+        fi
+
+        NP_READY=$(oc get nodepool -n clusters -l hypershift.openshift.io/cluster="${CLUSTER_NAME}" \
+          -o jsonpath='{.items[0].status.replicas}' 2>/dev/null || echo "0")
+        NP_DESIRED=$(oc get nodepool -n clusters -l hypershift.openshift.io/cluster="${CLUSTER_NAME}" \
+          -o jsonpath='{.items[0].spec.replicas}' 2>/dev/null || echo "0")
+        if [ "$NP_READY" -eq "$NP_DESIRED" ] && [ "$NP_DESIRED" -gt 0 ]; then
+          pass "NodePool replicas: ${NP_READY}/${NP_DESIRED}"
+        else
+          warn "NodePool replicas: ${NP_READY}/${NP_DESIRED}"
+        fi
+      fi
+
+      # ── Summary ────────────────────────────────────
+      echo ""
+      echo "============================================"
+      echo "Validation Summary: ${CLUSTER_NAME}"
+      echo "  PASS: ${PASS}  FAIL: ${FAIL}  WARN: ${WARN}"
+      echo "============================================"
+
+      if [ "$FAIL" -gt 0 ]; then
+        echo "Cluster validation FAILED with ${FAIL} failure(s)"
+        exit 1
+      fi
+
+      echo "Cluster validation PASSED"

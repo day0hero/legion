@@ -1,0 +1,148 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: deploy-hypershift-cluster
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Pipeline to deploy HyperShift hosted clusters using the hcp CLI
+  params:
+  - name: cluster-name
+    description: Name of the cluster
+    type: string
+  - name: base-domain
+    description: Base domain for the cluster
+    type: string
+  - name: cloud-region
+    description: AWS region
+    type: string
+  - name: node-pool-replicas
+    description: Number of worker node replicas
+    type: string
+    default: "2"
+  - name: instance-type
+    description: Worker node instance type
+    type: string
+    default: "m5.xlarge"
+  - name: release-image
+    description: OpenShift release image (empty or "default" uses management cluster version)
+    type: string
+    default: ""
+  - name: role-arn
+    description: AWS IAM role ARN for HyperShift
+    type: string
+  - name: cluster-group
+    description: ACM cluster group label
+    type: string
+    default: "provisioned"
+  - name: cluster-cidr
+    type: string
+    default: ""
+  - name: machine-cidr
+    type: string
+    default: ""
+  - name: service-cidr
+    type: string
+    default: ""
+  - name: timeout-minutes
+    description: Timeout in minutes for cluster to become available
+    type: string
+    default: "30"
+  workspaces:
+  - name: credentials
+    description: Workspace containing pull secret, STS creds, and release image
+  - name: kubeconfig
+    description: Workspace for cluster kubeconfig output
+  tasks:
+  - name: hypershift-create-cluster
+    taskRef:
+      name: hypershift-create-cluster
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: base-domain
+      value: $(params.base-domain)
+    - name: cloud-region
+      value: $(params.cloud-region)
+    - name: node-pool-replicas
+      value: $(params.node-pool-replicas)
+    - name: instance-type
+      value: $(params.instance-type)
+    - name: release-image
+      value: $(params.release-image)
+    - name: role-arn
+      value: $(params.role-arn)
+    - name: cluster-cidr
+      value: $(params.cluster-cidr)
+    - name: machine-cidr
+      value: $(params.machine-cidr)
+    - name: service-cidr
+      value: $(params.service-cidr)
+    workspaces:
+    - name: credentials
+      workspace: credentials
+
+  - name: hypershift-wait-ready
+    taskRef:
+      name: hypershift-wait-ready
+    runAfter:
+    - hypershift-create-cluster
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: timeout-minutes
+      value: $(params.timeout-minutes)
+    workspaces:
+    - name: kubeconfig
+      workspace: kubeconfig
+
+  - name: validate-cluster
+    taskRef:
+      name: validate-cluster
+    runAfter:
+    - hypershift-wait-ready
+    workspaces:
+    - name: kubeconfig
+      workspace: kubeconfig
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: cluster-type
+      value: "hypershift"
+    - name: run-smoke-test
+      value: "true"
+
+  - name: create-managed-cluster
+    taskRef:
+      name: create-managed-cluster
+    runAfter:
+    - validate-cluster
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: cluster-group
+      value: $(params.cluster-group)
+
+  - name: create-import-secret
+    taskRef:
+      name: create-import-secret
+    runAfter:
+    - create-managed-cluster
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    workspaces:
+    - name: kubeconfig
+      workspace: kubeconfig
+
+  - name: create-klusterlet-addon
+    taskRef:
+      name: create-klusterlet-addon
+    runAfter:
+    - create-import-secret
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: cluster-group
+      value: $(params.cluster-group)

@@ -1,0 +1,23 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: destroy-hypershift-
+  namespace: cluster-provisioning
+spec:
+  pipelineRef:
+    name: destroy-hypershift-cluster
+  params:
+  - name: cluster-name
+    value: my-hypershift-cluster
+  - name: cloud-region
+    value: us-east-2
+  - name: role-arn
+    value: "arn:aws:iam::123456789012:role/hypershift-cli-role"
+  - name: timeout-minutes
+    value: "30"
+  taskRunTemplate:
+    serviceAccountName: legion-provisioner
+  workspaces:
+  - name: credentials
+    secret:
+      secretName: hypershift-iam-config

@@ -1,0 +1,130 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hypershift-create-cluster
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Creates a HyperShift hosted cluster using the hcp CLI
+  params:
+  - name: cluster-name
+    type: string
+  - name: base-domain
+    type: string
+  - name: cloud-region
+    type: string
+  - name: node-pool-replicas
+    type: string
+    default: "2"
+  - name: instance-type
+    type: string
+    default: "m5.xlarge"
+  - name: release-image
+    type: string
+    default: ""
+  - name: pull-secret-path
+    type: string
+    default: "/credentials/pull-secret/.dockerconfigjson"
+  - name: sts-creds-path
+    type: string
+    default: "/credentials/sts/sts-creds.json"
+  - name: role-arn
+    type: string
+  - name: cluster-cidr
+    type: string
+    default: ""
+  - name: machine-cidr
+    type: string
+    default: ""
+  - name: service-cidr
+    type: string
+    default: ""
+  - name: network-type
+    type: string
+    default: "OVNKubernetes"
+  workspaces:
+  - name: credentials
+  steps:
+  - name: check-existing
+    image: {{ .Values.toolsImage }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      CLUSTER_NAME=$(params.cluster-name)
+
+      if oc get hostedcluster "${CLUSTER_NAME}" -n clusters &>/dev/null; then
+        echo "HostedCluster ${CLUSTER_NAME} already exists, skipping creation"
+        exit 0
+      fi
+
+      echo "HostedCluster ${CLUSTER_NAME} does not exist, proceeding with creation"
+  - name: resolve-version
+    image: {{ .Values.toolsImage }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      RELEASE_IMAGE=$(params.release-image)
+
+      if [ -z "${RELEASE_IMAGE}" ] || [ "${RELEASE_IMAGE}" = "default" ]; then
+        VERSION=$(oc get clusterversion version -o jsonpath='{.status.desired.version}')
+        echo "Using management cluster version: ${VERSION}"
+        echo -n "quay.io/openshift-release-dev/ocp-release:${VERSION}-x86_64" > /workspace/credentials/release-image
+      else
+        echo "Using specified release image: ${RELEASE_IMAGE}"
+        echo -n "${RELEASE_IMAGE}" > /workspace/credentials/release-image
+      fi
+  - name: create-cluster
+    image: {{ .Values.hcpImage }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      CLUSTER_NAME=$(params.cluster-name)
+      BASE_DOMAIN=$(params.base-domain)
+      REGION=$(params.cloud-region)
+      REPLICAS=$(params.node-pool-replicas)
+      INSTANCE_TYPE=$(params.instance-type)
+      PULL_SECRET=$(params.pull-secret-path)
+      STS_CREDS=$(params.sts-creds-path)
+      ROLE_ARN=$(params.role-arn)
+      RELEASE_IMAGE=$(cat /workspace/credentials/release-image)
+
+      if oc get hostedcluster "${CLUSTER_NAME}" -n clusters &>/dev/null; then
+        echo "HostedCluster ${CLUSTER_NAME} already exists, skipping"
+        exit 0
+      fi
+
+      CMD="hcp create cluster aws"
+      CMD="${CMD} --name ${CLUSTER_NAME}"
+      CMD="${CMD} --node-pool-replicas ${REPLICAS}"
+      CMD="${CMD} --instance-type ${INSTANCE_TYPE}"
+      CMD="${CMD} --infra-id ${CLUSTER_NAME}"
+      CMD="${CMD} --base-domain ${BASE_DOMAIN}"
+      CMD="${CMD} --pull-secret ${PULL_SECRET}"
+      CMD="${CMD} --region ${REGION}"
+      CMD="${CMD} --release-image ${RELEASE_IMAGE}"
+      CMD="${CMD} --sts-creds ${STS_CREDS}"
+      CMD="${CMD} --role-arn ${ROLE_ARN}"
+
+      CLUSTER_CIDR=$(params.cluster-cidr)
+      MACHINE_CIDR=$(params.machine-cidr)
+      SERVICE_CIDR=$(params.service-cidr)
+
+      [ -n "${CLUSTER_CIDR}" ] && CMD="${CMD} --cluster-cidr ${CLUSTER_CIDR}"
+      [ -n "${MACHINE_CIDR}" ] && CMD="${CMD} --machine-cidr ${MACHINE_CIDR}"
+      [ -n "${SERVICE_CIDR}" ] && CMD="${CMD} --service-cidr ${SERVICE_CIDR}"
+
+      echo "============================================"
+      echo "Creating HyperShift cluster: ${CLUSTER_NAME}"
+      echo "Region: ${REGION}"
+      echo "Replicas: ${REPLICAS}"
+      echo "Instance Type: ${INSTANCE_TYPE}"
+      echo "Release Image: ${RELEASE_IMAGE}"
+      echo "============================================"
+
+      eval ${CMD}
+
+      echo "hcp create cluster command completed"

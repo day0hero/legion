@@ -1,0 +1,112 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: destroy-hypershift-cluster
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Pipeline to destroy a HyperShift hosted cluster
+  params:
+  - name: cluster-name
+    description: Name of the cluster to destroy
+    type: string
+  - name: cloud-region
+    description: AWS region where the cluster was created
+    type: string
+  - name: role-arn
+    description: AWS IAM role ARN for HyperShift
+    type: string
+  - name: timeout-minutes
+    description: Timeout in minutes for resource deletion
+    type: string
+    default: "30"
+  workspaces:
+  - name: credentials
+    description: Workspace containing STS creds for destroy operation
+  tasks:
+  - name: destroy-hosted-cluster
+    taskSpec:
+      params:
+      - name: cluster-name
+        type: string
+      - name: cloud-region
+        type: string
+      - name: role-arn
+        type: string
+      workspaces:
+      - name: credentials
+      steps:
+      - name: destroy
+        image: {{ .Values.hcpImage }}
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+
+          CLUSTER_NAME=$(params.cluster-name)
+          REGION=$(params.cloud-region)
+          ROLE_ARN=$(params.role-arn)
+          STS_CREDS="/workspace/credentials/sts/sts-creds.json"
+
+          if ! oc get hostedcluster "${CLUSTER_NAME}" -n clusters &>/dev/null; then
+            echo "HostedCluster ${CLUSTER_NAME} not found, nothing to destroy"
+            exit 0
+          fi
+
+          echo "Destroying HyperShift cluster: ${CLUSTER_NAME}"
+
+          hcp destroy cluster aws \
+            --name "${CLUSTER_NAME}" \
+            --infra-id "${CLUSTER_NAME}" \
+            --region "${REGION}" \
+            --role-arn "${ROLE_ARN}" \
+            --sts-creds "${STS_CREDS}" || true
+
+          echo "hcp destroy command completed"
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: cloud-region
+      value: $(params.cloud-region)
+    - name: role-arn
+      value: $(params.role-arn)
+    workspaces:
+    - name: credentials
+      workspace: credentials
+
+  - name: delete-managed-cluster
+    runAfter:
+    - destroy-hosted-cluster
+    taskSpec:
+      params:
+      - name: cluster-name
+        type: string
+      - name: timeout-minutes
+        type: string
+      steps:
+      - name: delete
+        image: {{ .Values.toolsImage }}
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+
+          CLUSTER_NAME=$(params.cluster-name)
+          TIMEOUT=$(params.timeout-minutes)
+
+          echo "Deleting ManagedCluster ${CLUSTER_NAME}..."
+          oc delete managedcluster "${CLUSTER_NAME}" \
+            --ignore-not-found \
+            --wait=true \
+            --timeout="${TIMEOUT}m" || true
+
+          echo "Deleting KlusterletAddonConfig..."
+          oc delete klusterletaddonconfig "${CLUSTER_NAME}" \
+            -n "${CLUSTER_NAME}" \
+            --ignore-not-found || true
+
+          echo "Cleanup complete"
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: timeout-minutes
+      value: $(params.timeout-minutes)

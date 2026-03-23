@@ -1,0 +1,25 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: create-namespace
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: Creates a namespace for the cluster deployment
+  params:
+  - name: cluster-name
+    type: string
+  steps:
+  - name: create-namespace
+    image: {{ .Values.toolsImage | quote }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      CLUSTER_NAME="$(params.cluster-name)"
+      if oc get namespace "$CLUSTER_NAME" &>/dev/null; then
+        echo "Namespace $CLUSTER_NAME already exists"
+      else
+        echo "Creating namespace $CLUSTER_NAME"
+        oc create namespace "$CLUSTER_NAME"
+      fi
