@@ -13,7 +13,7 @@ data:
   base-domain: example.com
   cloud-provider: aws
   cloud-region: us-east-2
-  cluster-version: img4.17.0-x86-64-appsub
+  cluster-version: img4.21.6-x86-64-appsub
   control-plane-replicas: "3"
   control-plane-machine-type: m5.xlarge
   worker-replicas: "3"

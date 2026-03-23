@@ -18,7 +18,7 @@ spec:
       type: string
     - name: cluster-version
       type: string
-      default: "img4.17.0-x86-64-appsub"
+      default: "img4.21.6-x86-64-appsub"
     - name: cluster-group
       type: string
       default: "provisioned"
