@@ -10,3 +10,8 @@ pullSecret:
 
 hypershiftIAM:
   key: secret/data/hub/hypershift-iam
+
+hypershiftOIDC:
+  enabled: false
+  region: ""
+  bucketName: ""

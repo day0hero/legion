@@ -1,0 +1,22 @@
+secretStore:
+  name: vault-backend
+  kind: ClusterSecretStore
+
+ackCredentials:
+  key: secret/data/hub/aws
+
+oidc:
+  region: ""
+  bucketName: ""
+
+s3:
+  createBucket: false
+  createBucketPolicy: true
+  additionalTags: {}
+
+ackS3:
+  ack_enable_development_logging: true
+  ack_log_level: debug
+  ack_resource_tags: acktagged
+  enable_leader_election: true
+  reconcile_default_max_concurrent_syncs: 1

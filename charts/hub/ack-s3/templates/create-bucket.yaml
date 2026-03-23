@@ -1,0 +1,20 @@
+{{- if .Values.s3.createBucket }}
+apiVersion: s3.services.k8s.aws/v1alpha1
+kind: Bucket
+metadata:
+  labels:
+{{- range $key, $value := .Values.s3.additionalTags }}
+    {{ $key }}: {{ $value }}
+{{- end }}
+  name: {{ .Values.oidc.bucketName }}
+  namespace: ack-system
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  name: {{ .Values.oidc.bucketName }}
+{{- if .Values.s3.createBucketPolicy }}
+  policy: >-
+    {{ include "ack-s3-controller.bucket_policy" . }}
+{{- end }}
+{{- end }}

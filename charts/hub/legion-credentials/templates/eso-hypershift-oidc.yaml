@@ -1,0 +1,25 @@
+{{- if .Values.hypershiftOIDC.enabled }}
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: hypershift-eso-oidc
+  namespace: local-cluster
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: {{ .Values.secretStore.name }}
+    kind: {{ .Values.secretStore.kind }}
+  target:
+    name: hypershift-operator-oidc-provider-s3-credentials
+    template:
+      mergePolicy: Merge
+      type: Opaque
+      data:
+        region: {{ .Values.hypershiftOIDC.region }}
+        bucket: {{ .Values.hypershiftOIDC.bucketName }}
+  dataFrom:
+  - extract:
+      key: {{ .Values.awsCreds.key }}
+{{- end }}

@@ -10,6 +10,10 @@ clusterGroup:
     - cluster-provisioning
     - cert-manager-operator
     - legion-monitoring
+#    - ack-system
+
+  operatorgroupExcludes:
+    - ack-system
 
   subscriptions:
     acm:
@@ -27,9 +31,16 @@ clusterGroup:
       source: redhat-operators
       channel: stable-v1
 
+#    ack-s3:
+#      name: ack-s3-controller
+#      namespace: ack-system
+#      channel: alpha
+#      source: community-operators
+
   argoProjects:
     - hub
     - infrastructure
+#    - s3
 
   applications:
     acm:
@@ -58,6 +69,13 @@ clusterGroup:
       namespace: cluster-provisioning
       argoProject: infrastructure
       path: charts/hub/legion-credentials
+      overrides:
+      - name: hypershiftOIDC.enabled
+        value: true
+      - name: hypershiftOIDC.region
+        value: us-east-2
+      - name: hypershiftOIDC.bucketName
+        value: vp-hypershift-state
 
     hcp-cli:
       name: hcp-cli
@@ -88,6 +106,19 @@ clusterGroup:
       namespace: openshift-machine-api
       argoProject: infrastructure
       path: charts/hub/cluster-autoscaler
+
+#    ack-s3:
+#      name: ack-s3
+#      namespace: ack-system
+#      argoProject: s3
+#      path: charts/hub/ack-s3
+#      overrides:
+#      - name: oidc.region
+#        value: us-east-2
+#      - name: oidc.bucketName
+#        value: vp-hypershift-state
+#      - name: s3.createBucket
+#        value: false
 
   imperative:
     namespace: imperative

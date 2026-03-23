@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ack-s3
+description: AWS Controller for Kubernetes - S3 Resources
+type: application
+version: 0.1.0
+appVersion: "1.16.0"
