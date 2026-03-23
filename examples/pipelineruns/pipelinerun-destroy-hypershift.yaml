@@ -19,5 +19,10 @@ spec:
     serviceAccountName: legion-provisioner
   workspaces:
   - name: credentials
-    secret:
-      secretName: hypershift-iam-config
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

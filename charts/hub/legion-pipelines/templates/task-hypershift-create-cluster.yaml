@@ -25,10 +25,10 @@ spec:
     default: ""
   - name: pull-secret-path
     type: string
-    default: "/credentials/pull-secret/.dockerconfigjson"
+    default: ""
   - name: sts-creds-path
     type: string
-    default: "/credentials/sts/sts-creds.json"
+    default: ""
   - name: role-arn
     type: string
   - name: cluster-cidr
@@ -87,8 +87,9 @@ spec:
       REGION=$(params.cloud-region)
       REPLICAS=$(params.node-pool-replicas)
       INSTANCE_TYPE=$(params.instance-type)
-      PULL_SECRET=$(params.pull-secret-path)
-      STS_CREDS=$(params.sts-creds-path)
+      CREDS_DIR="$(workspaces.credentials.path)"
+      PULL_SECRET="${CREDS_DIR}/pull-secret.json"
+      STS_CREDS="${CREDS_DIR}/sts-creds.json"
       ROLE_ARN=$(params.role-arn)
       RELEASE_IMAGE=$(cat /tekton/home/release-image)
 

@@ -21,11 +21,62 @@ spec:
     description: Timeout in minutes for resource deletion
     type: string
     default: "30"
+  - name: secret-store-name
+    type: string
+    default: "vault-backend"
+  - name: aws-creds-key-path
+    type: string
+    default: "secret/data/hub/aws"
+  - name: pullsecret-key-path
+    type: string
+    default: "pushsecrets/global-pull-secret"
   workspaces:
   - name: credentials
-    description: Workspace containing STS creds for destroy operation
+    description: Writable workspace for STS creds
   tasks:
+  - name: create-namespace
+    taskRef:
+      name: create-namespace
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+
+  - name: create-externalsecrets
+    runAfter:
+    - create-namespace
+    taskRef:
+      name: create-externalsecrets
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: cloud-provider
+      value: aws
+    - name: secret-store-name
+      value: $(params.secret-store-name)
+    - name: aws-creds-key-path
+      value: $(params.aws-creds-key-path)
+    - name: gcp-creds-key-path
+      value: ""
+    - name: azure-creds-key-path
+      value: ""
+    - name: pullsecret-key-path
+      value: $(params.pullsecret-key-path)
+
+  - name: prepare-credentials
+    runAfter:
+    - create-externalsecrets
+    taskRef:
+      name: hypershift-prepare-credentials
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    workspaces:
+    - name: credentials
+      workspace: credentials
+
   - name: destroy-hosted-cluster
+    runAfter:
+    - prepare-credentials
     taskSpec:
       params:
       - name: cluster-name
@@ -46,7 +97,7 @@ spec:
           CLUSTER_NAME=$(params.cluster-name)
           REGION=$(params.cloud-region)
           ROLE_ARN=$(params.role-arn)
-          STS_CREDS="/workspace/credentials/sts/sts-creds.json"
+          STS_CREDS="$(workspaces.credentials.path)/sts-creds.json"
 
           if ! oc get hostedcluster "${CLUSTER_NAME}" -n clusters &>/dev/null; then
             echo "HostedCluster ${CLUSTER_NAME} not found, nothing to destroy"

@@ -49,13 +49,64 @@ spec:
     description: Timeout in minutes for cluster to become available
     type: string
     default: "30"
+  - name: secret-store-name
+    type: string
+    default: "vault-backend"
+  - name: aws-creds-key-path
+    type: string
+    default: "secret/data/hub/aws"
+  - name: pullsecret-key-path
+    type: string
+    default: "pushsecrets/global-pull-secret"
   workspaces:
   - name: credentials
-    description: Workspace containing pull secret, STS creds, and release image
+    description: Writable workspace for pull secret, STS creds, and release image
   - name: kubeconfig
     description: Workspace for cluster kubeconfig output
   tasks:
+  - name: create-namespace
+    taskRef:
+      name: create-namespace
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+
+  - name: create-externalsecrets
+    runAfter:
+    - create-namespace
+    taskRef:
+      name: create-externalsecrets
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    - name: cloud-provider
+      value: aws
+    - name: secret-store-name
+      value: $(params.secret-store-name)
+    - name: aws-creds-key-path
+      value: $(params.aws-creds-key-path)
+    - name: gcp-creds-key-path
+      value: ""
+    - name: azure-creds-key-path
+      value: ""
+    - name: pullsecret-key-path
+      value: $(params.pullsecret-key-path)
+
+  - name: prepare-credentials
+    runAfter:
+    - create-externalsecrets
+    taskRef:
+      name: hypershift-prepare-credentials
+    params:
+    - name: cluster-name
+      value: $(params.cluster-name)
+    workspaces:
+    - name: credentials
+      workspace: credentials
+
   - name: hypershift-create-cluster
+    runAfter:
+    - prepare-credentials
     taskRef:
       name: hypershift-create-cluster
     params:

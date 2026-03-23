@@ -8,6 +8,7 @@ serviceAccount:
 toolsImage: image-registry.openshift-image-registry.svc:5000/openshift/tools
 # Built by the hcp-cli chart and pushed to the internal registry
 hcpImage: image-registry.openshift-image-registry.svc:5000/cluster-provisioning/hcp-cli:latest
+awsCliImage: amazon/aws-cli:latest
 
 externalSecrets:
   secretStore:
