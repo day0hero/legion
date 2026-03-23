@@ -71,10 +71,10 @@ spec:
       if [ -z "${RELEASE_IMAGE}" ] || [ "${RELEASE_IMAGE}" = "default" ]; then
         VERSION=$(oc get clusterversion version -o jsonpath='{.status.desired.version}')
         echo "Using management cluster version: ${VERSION}"
-        echo -n "quay.io/openshift-release-dev/ocp-release:${VERSION}-x86_64" > /workspace/credentials/release-image
+        echo -n "quay.io/openshift-release-dev/ocp-release:${VERSION}-x86_64" > /tekton/home/release-image
       else
         echo "Using specified release image: ${RELEASE_IMAGE}"
-        echo -n "${RELEASE_IMAGE}" > /workspace/credentials/release-image
+        echo -n "${RELEASE_IMAGE}" > /tekton/home/release-image
       fi
   - name: create-cluster
     image: {{ .Values.hcpImage }}
@@ -90,7 +90,7 @@ spec:
       PULL_SECRET=$(params.pull-secret-path)
       STS_CREDS=$(params.sts-creds-path)
       ROLE_ARN=$(params.role-arn)
-      RELEASE_IMAGE=$(cat /workspace/credentials/release-image)
+      RELEASE_IMAGE=$(cat /tekton/home/release-image)
 
       if oc get hostedcluster "${CLUSTER_NAME}" -n clusters &>/dev/null; then
         echo "HostedCluster ${CLUSTER_NAME} already exists, skipping"

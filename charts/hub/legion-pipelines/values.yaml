@@ -6,8 +6,8 @@ serviceAccount:
   namespace: cluster-provisioning
 
 toolsImage: image-registry.openshift-image-registry.svc:5000/openshift/tools
-# Built by the hcp-cli chart — ImageStream with lookupPolicy.local: true
-hcpImage: hcp-cli:latest
+# Built by the hcp-cli chart and pushed to the internal registry
+hcpImage: image-registry.openshift-image-registry.svc:5000/cluster-provisioning/hcp-cli:latest
 
 externalSecrets:
   secretStore:
