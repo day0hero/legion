@@ -1025,7 +1025,6 @@ spec:
                   legion.io/role-type: "control-plane-operator"
               spec:
                 forProvider:
-                  name: ""
                   assumeRolePolicy: ""
                 providerConfigRef:
                   name: default
@@ -1037,7 +1036,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-control-plane-operator"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1062,7 +1061,6 @@ spec:
                   legion.io/role-type: "image-registry"
               spec:
                 forProvider:
-                  name: ""
                   assumeRolePolicy: ""
                 providerConfigRef:
                   name: default
@@ -1074,7 +1072,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-image-registry"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1099,7 +1097,6 @@ spec:
                   legion.io/role-type: "ingress"
               spec:
                 forProvider:
-                  name: ""
                   assumeRolePolicy: ""
                 providerConfigRef:
                   name: default
@@ -1111,7 +1108,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-ingress"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1136,7 +1133,6 @@ spec:
                   legion.io/role-type: "kube-cloud-controller"
               spec:
                 forProvider:
-                  name: ""
                   assumeRolePolicy: ""
                 providerConfigRef:
                   name: default
@@ -1148,7 +1144,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-kube-cloud-controller"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1173,7 +1169,6 @@ spec:
                   legion.io/role-type: "network"
               spec:
                 forProvider:
-                  name: ""
                   assumeRolePolicy: ""
                 providerConfigRef:
                   name: default
@@ -1185,7 +1180,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-network"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1210,7 +1205,6 @@ spec:
                   legion.io/role-type: "node-pool-management"
               spec:
                 forProvider:
-                  name: ""
                   assumeRolePolicy: ""
                 providerConfigRef:
                   name: default
@@ -1222,7 +1216,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-node-pool-management"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1247,7 +1241,6 @@ spec:
                   legion.io/role-type: "storage"
               spec:
                 forProvider:
-                  name: ""
                   assumeRolePolicy: ""
                 providerConfigRef:
                   name: default
@@ -1259,7 +1252,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-storage"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1284,7 +1277,6 @@ spec:
               kind: RolePolicy
               spec:
                 forProvider:
-                  name: ""
                   roleSelector:
                     matchControllerRef: true
                     matchLabels:
@@ -1301,7 +1293,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-control-plane-operator-policy"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: iam-policy-image-registry
             base:
@@ -1309,7 +1301,6 @@ spec:
               kind: RolePolicy
               spec:
                 forProvider:
-                  name: ""
                   roleSelector:
                     matchControllerRef: true
                     matchLabels:
@@ -1326,7 +1317,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-image-registry-policy"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: iam-policy-ingress
             base:
@@ -1334,7 +1325,6 @@ spec:
               kind: RolePolicy
               spec:
                 forProvider:
-                  name: ""
                   roleSelector:
                     matchControllerRef: true
                     matchLabels:
@@ -1351,7 +1341,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-ingress-policy"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: iam-policy-kube-cloud-controller
             base:
@@ -1359,7 +1349,6 @@ spec:
               kind: RolePolicy
               spec:
                 forProvider:
-                  name: ""
                   roleSelector:
                     matchControllerRef: true
                     matchLabels:
@@ -1376,7 +1365,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-kube-cloud-controller-policy"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: iam-policy-network
             base:
@@ -1384,7 +1373,6 @@ spec:
               kind: RolePolicy
               spec:
                 forProvider:
-                  name: ""
                   roleSelector:
                     matchControllerRef: true
                     matchLabels:
@@ -1401,7 +1389,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-network-policy"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: iam-policy-node-pool-management
             base:
@@ -1409,7 +1397,6 @@ spec:
               kind: RolePolicy
               spec:
                 forProvider:
-                  name: ""
                   roleSelector:
                     matchControllerRef: true
                     matchLabels:
@@ -1426,7 +1413,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-node-pool-management-policy"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: iam-policy-storage
             base:
@@ -1434,7 +1421,6 @@ spec:
               kind: RolePolicy
               spec:
                 forProvider:
-                  name: ""
                   roleSelector:
                     matchControllerRef: true
                     matchLabels:
@@ -1451,7 +1437,7 @@ spec:
                   strategy: string
                   string:
                     fmt: "%s-storage-policy"
-                toFieldPath: spec.forProvider.name
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           # ──────────────────────────────────────────────────
           # Cluster namespace
