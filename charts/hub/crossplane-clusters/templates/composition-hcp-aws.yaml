@@ -459,6 +459,9 @@ spec:
             base:
               apiVersion: ec2.aws.upbound.io/v1beta1
               kind: NATGateway
+              metadata:
+                labels:
+                  legion.io/az-index: "1"
               spec:
                 forProvider:
                   region: us-east-2
@@ -493,6 +496,9 @@ spec:
             base:
               apiVersion: ec2.aws.upbound.io/v1beta1
               kind: NATGateway
+              metadata:
+                labels:
+                  legion.io/az-index: "2"
               spec:
                 forProvider:
                   region: us-east-2
@@ -527,6 +533,9 @@ spec:
             base:
               apiVersion: ec2.aws.upbound.io/v1beta1
               kind: NATGateway
+              metadata:
+                labels:
+                  legion.io/az-index: "3"
               spec:
                 forProvider:
                   region: us-east-2
