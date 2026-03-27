@@ -1,4 +1,4 @@
-# Chart-level defaults (overridden by global.crossplane.* from values-legion_caas.yaml)
+# Chart-level defaults (overridden by global.* from values-legion_caas.yaml)
 global:
   crossplane:
     providers:
@@ -23,9 +23,10 @@ global:
         secretKey: credentials
         fromVault: true
 
-  s3:
-    createBucket: false
-    bucketName: ""
-    region: us-east-2
-    publicReadAccess: true
-    additionalTags: {}
+  hypershift:
+    oidc:
+      region: ""
+      bucketName: ""
+      createBucket: false
+      publicReadAccess: true
+      additionalTags: {}

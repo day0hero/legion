@@ -29,22 +29,18 @@ global:
         secretKey: credentials
         fromVault: true
 
-  # ── HyperShift OIDC Configuration ───────────────────────────
+  # ── HyperShift OIDC S3 Bucket ───────────────────────────────
+  # Single definition for the OIDC bucket; consumed by both
+  # legion-credentials (ESO secret) and crossplane-providers (bucket lifecycle)
   hypershift:
     oidc:
       region: us-east-2
       bucketName: legion-hypershift-oidc
-
-  # ── S3 Bucket for HyperShift OIDC ──────────────────────────
-  # Managed by Crossplane (replaces ack-s3)
-  s3:
-    createBucket: true
-    bucketName: legion-hypershift-oidc
-    region: us-east-2
-    publicReadAccess: true
-    additionalTags:
-      managed-by: crossplane
-      purpose: hypershift-oidc
+      createBucket: true
+      publicReadAccess: true
+      additionalTags:
+        managed-by: crossplane
+        purpose: hypershift-oidc
 
 # ── Cluster Provisioning Defaults ──────────────────────────────
 # Defaults for Crossplane XRD LegionCluster claims
