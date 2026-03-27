@@ -1146,8 +1146,7 @@ spec:
                           region: us-east-2
                           endpointAccess: Public
                           cloudProviderConfig:
-                            vpc:
-                              id: ""
+                            vpc: ""
                             subnet:
                               filters:
                                 - name: "tag:kubernetes.io/role/internal-elb"
@@ -1211,7 +1210,7 @@ spec:
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.endpointAccess
               - type: FromCompositeFieldPath
                 fromFieldPath: status.vpcId
-                toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.vpc.id
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.vpc
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
@@ -1264,7 +1263,11 @@ spec:
                           rootVolume:
                             size: 120
                             type: gp3
-                          subnetID: ""
+                          subnet:
+                            filters:
+                              - name: "tag:kubernetes.io/role/internal-elb"
+                                values:
+                                  - "1"
                       release:
                         image: ""
                 providerConfigRef:
