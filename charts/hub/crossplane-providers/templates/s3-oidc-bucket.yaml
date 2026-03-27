@@ -1,0 +1,86 @@
+{{- if .Values.global.s3.createBucket }}
+---
+apiVersion: s3.aws.upbound.io/v1beta2
+kind: Bucket
+metadata:
+  name: {{ .Values.global.s3.bucketName }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    crossplane.io/external-name: {{ .Values.global.s3.bucketName }}
+spec:
+  forProvider:
+    region: {{ .Values.global.s3.region }}
+    tags:
+      Name: {{ .Values.global.s3.bucketName }}
+      {{- range $key, $value := .Values.global.s3.additionalTags }}
+      {{ $key }}: {{ $value | quote }}
+      {{- end }}
+  providerConfigRef:
+    name: {{ .Values.global.crossplane.providerConfig.name }}
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketOwnershipControls
+metadata:
+  name: {{ .Values.global.s3.bucketName }}-ownership
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  forProvider:
+    region: {{ .Values.global.s3.region }}
+    bucketRef:
+      name: {{ .Values.global.s3.bucketName }}
+    rule:
+      - objectOwnership: BucketOwnerPreferred
+  providerConfigRef:
+    name: {{ .Values.global.crossplane.providerConfig.name }}
+{{- if .Values.global.s3.publicReadAccess }}
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketPublicAccessBlock
+metadata:
+  name: {{ .Values.global.s3.bucketName }}-public-access
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  forProvider:
+    region: {{ .Values.global.s3.region }}
+    bucketRef:
+      name: {{ .Values.global.s3.bucketName }}
+    blockPublicAcls: false
+    blockPublicPolicy: false
+    ignorePublicAcls: false
+    restrictPublicBuckets: false
+  providerConfigRef:
+    name: {{ .Values.global.crossplane.providerConfig.name }}
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketPolicy
+metadata:
+  name: {{ .Values.global.s3.bucketName }}-policy
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  forProvider:
+    region: {{ .Values.global.s3.region }}
+    bucketRef:
+      name: {{ .Values.global.s3.bucketName }}
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::{{ .Values.global.s3.bucketName }}/*"
+          }
+        ]
+      }
+  providerConfigRef:
+    name: {{ .Values.global.crossplane.providerConfig.name }}
+{{- end }}
+{{- end }}

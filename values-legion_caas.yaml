@@ -1,0 +1,88 @@
+# Legion CaaS (Cluster-as-a-Service) Configuration
+# Crossplane, HyperShift OIDC, and S3 infrastructure settings
+#
+# This file is loaded via sharedValueFiles and merged into all hub applications.
+# Values under 'global' are accessible to every chart as .Values.global.*
+
+global:
+  # ── Crossplane Configuration ─────────────────────────────────
+  crossplane:
+    providers:
+      version: v2.4.0
+      packages:
+        - name: provider-family-aws
+          package: xpkg.upbound.io/upbound/provider-family-aws
+        - name: provider-aws-ec2
+          package: xpkg.upbound.io/upbound/provider-aws-ec2
+        - name: provider-aws-s3
+          package: xpkg.upbound.io/upbound/provider-aws-s3
+
+    kubernetesProvider:
+      version: v0.16.0
+      package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes
+
+    providerConfig:
+      name: default
+      credentials:
+        secretName: aws-provider-creds
+        secretNamespace: crossplane-system
+        secretKey: credentials
+        fromVault: true
+
+  # ── HyperShift OIDC Configuration ───────────────────────────
+  hypershift:
+    oidc:
+      region: us-east-2
+      bucketName: legion-hypershift-oidc
+
+  # ── S3 Bucket for HyperShift OIDC ──────────────────────────
+  # Managed by Crossplane (replaces ack-s3)
+  s3:
+    createBucket: true
+    bucketName: legion-hypershift-oidc
+    region: us-east-2
+    publicReadAccess: true
+    additionalTags:
+      managed-by: crossplane
+      purpose: hypershift-oidc
+
+# ── Cluster Provisioning Defaults ──────────────────────────────
+# Defaults for Crossplane XRD LegionCluster claims
+cluster:
+  defaults:
+    cloudProvider: aws
+    cloudRegion: us-east-2
+    instanceType: m5.xlarge
+    workerReplicas: 3
+    controlPlaneReplicas: 3
+    controlPlaneMachineType: m5.xlarge
+    clusterVersion: "img4.21.6-x86-64-appsub"
+    rootVolumeSize: 120
+    rootVolumeType: gp3
+
+  networking:
+    vpcCidr: "10.0.0.0/16"
+    podCidr: "10.128.0.0/14"
+    serviceCidr: "172.30.0.0/16"
+    machineCidr: "10.0.0.0/16"
+    hostPrefix: 23
+    publicSubnets:
+      - cidr: "10.0.0.0/20"
+        az: a
+      - cidr: "10.0.16.0/20"
+        az: b
+      - cidr: "10.0.32.0/20"
+        az: c
+    privateSubnets:
+      - cidr: "10.0.128.0/20"
+        az: a
+      - cidr: "10.0.144.0/20"
+        az: b
+      - cidr: "10.0.160.0/20"
+        az: c
+
+  credentials:
+    namespace: cluster-provisioning
+    secretStoreName: vault-backend
+    awsCredsVaultKey: secret/data/hub/aws
+    pullSecretVaultKey: pushsecrets/global-pull-secret

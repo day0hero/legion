@@ -1,20 +1,31 @@
-crossplane:
-  providers:
-    version: v2.4.0
-    packages:
-      - name: provider-family-aws
-        package: xpkg.upbound.io/upbound/provider-family-aws
-      - name: provider-aws-ec2
-        package: xpkg.upbound.io/upbound/provider-aws-ec2
+# Chart-level defaults (overridden by global.crossplane.* from values-legion_caas.yaml)
+global:
+  crossplane:
+    providers:
+      version: v2.4.0
+      packages:
+        - name: provider-family-aws
+          package: xpkg.upbound.io/upbound/provider-family-aws
+        - name: provider-aws-ec2
+          package: xpkg.upbound.io/upbound/provider-aws-ec2
+        - name: provider-aws-s3
+          package: xpkg.upbound.io/upbound/provider-aws-s3
 
-  kubernetesProvider:
-    version: v0.16.0
-    package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes
+    kubernetesProvider:
+      version: v0.16.0
+      package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes
 
-  providerConfig:
-    name: default
-    credentials:
-      secretName: aws-provider-creds
-      secretNamespace: crossplane-system
-      secretKey: credentials
-      fromVault: true
+    providerConfig:
+      name: default
+      credentials:
+        secretName: aws-provider-creds
+        secretNamespace: crossplane-system
+        secretKey: credentials
+        fromVault: true
+
+  s3:
+    createBucket: false
+    bucketName: ""
+    region: us-east-2
+    publicReadAccess: true
+    additionalTags: {}

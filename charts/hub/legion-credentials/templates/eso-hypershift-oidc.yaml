@@ -1,4 +1,4 @@
-{{- if .Values.hypershiftOIDC.enabled }}
+{{- if and .Values.global.hypershift.oidc.region .Values.global.hypershift.oidc.bucketName }}
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
@@ -17,8 +17,8 @@ spec:
       mergePolicy: Merge
       type: Opaque
       data:
-        region: {{ .Values.hypershiftOIDC.region }}
-        bucket: {{ .Values.hypershiftOIDC.bucketName }}
+        region: {{ .Values.global.hypershift.oidc.region }}
+        bucket: {{ .Values.global.hypershift.oidc.bucketName }}
   dataFrom:
   - extract:
       key: {{ .Values.awsCreds.key }}

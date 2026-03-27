@@ -1,7 +1,7 @@
 apiVersion: aws.upbound.io/v1beta1
 kind: ProviderConfig
 metadata:
-  name: {{ .Values.crossplane.providerConfig.name }}
+  name: {{ .Values.global.crossplane.providerConfig.name }}
   annotations:
     argocd.argoproj.io/sync-wave: "2"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
@@ -9,6 +9,6 @@ spec:
   credentials:
     source: Secret
     secretRef:
-      namespace: {{ .Values.crossplane.providerConfig.credentials.secretNamespace }}
-      name: {{ .Values.crossplane.providerConfig.credentials.secretName }}
-      key: {{ .Values.crossplane.providerConfig.credentials.secretKey }}
+      namespace: {{ .Values.global.crossplane.providerConfig.credentials.secretNamespace }}
+      name: {{ .Values.global.crossplane.providerConfig.credentials.secretName }}
+      key: {{ .Values.global.crossplane.providerConfig.credentials.secretKey }}

@@ -1,3 +1,4 @@
+# Chart-level defaults (overridden by values-legion_caas.yaml via sharedValueFiles)
 cluster:
   defaults:
     cloudProvider: aws
@@ -10,33 +11,15 @@ cluster:
     rootVolumeSize: 120
     rootVolumeType: gp3
 
-  networking:
-    vpcCidr: "10.0.0.0/16"
-    podCidr: "10.128.0.0/14"
-    serviceCidr: "172.30.0.0/16"
-    machineCidr: "10.0.0.0/16"
-    hostPrefix: 23
-    publicSubnets:
-      - cidr: "10.0.0.0/20"
-        az: a
-      - cidr: "10.0.16.0/20"
-        az: b
-      - cidr: "10.0.32.0/20"
-        az: c
-    privateSubnets:
-      - cidr: "10.0.128.0/20"
-        az: a
-      - cidr: "10.0.144.0/20"
-        az: b
-      - cidr: "10.0.160.0/20"
-        az: c
-
   credentials:
     namespace: cluster-provisioning
-    pullSecretName: pullsecret-cluster-cluster-provisioning
-    awsCredsSecretName: aws-creds
     secretStoreName: vault-backend
     awsCredsVaultKey: secret/data/hub/aws
     pullSecretVaultKey: pushsecrets/global-pull-secret
 
   providerConfigRef: default
+
+global:
+  crossplane:
+    providerConfig:
+      name: default
