@@ -1,0 +1,405 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: hive-aws
+  labels:
+    legion.io/cluster-type: hive
+    legion.io/cloud-provider: aws
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  compositeTypeRef:
+    apiVersion: legion.io/v1alpha1
+    kind: XLegionCluster
+  resources:
+    # ──────────────────────────────────────────────────
+    # Cluster namespace
+    # ──────────────────────────────────────────────────
+    - name: cluster-namespace
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.name
+
+    # ──────────────────────────────────────────────────
+    # ExternalSecret: AWS credentials
+    # ──────────────────────────────────────────────────
+    - name: aws-creds
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: external-secrets.io/v1
+              kind: ExternalSecret
+              metadata:
+                name: aws-creds
+                namespace: ""
+              spec:
+                refreshInterval: 1h
+                secretStoreRef:
+                  name: vault-backend
+                  kind: ClusterSecretStore
+                target:
+                  name: aws-creds
+                  creationPolicy: Owner
+                data:
+                  - secretKey: aws_access_key_id
+                    remoteRef:
+                      key: secret/data/hub/aws
+                      property: aws_access_key_id
+                  - secretKey: aws_secret_access_key
+                    remoteRef:
+                      key: secret/data/hub/aws
+                      property: aws_secret_access_key
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.secretStoreName
+          toFieldPath: spec.forProvider.manifest.spec.secretStoreRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.awsCredsVaultKey
+          toFieldPath: spec.forProvider.manifest.spec.data[0].remoteRef.key
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.awsCredsVaultKey
+          toFieldPath: spec.forProvider.manifest.spec.data[1].remoteRef.key
+
+    # ──────────────────────────────────────────────────
+    # ExternalSecret: Pull secret
+    # ──────────────────────────────────────────────────
+    - name: pull-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: external-secrets.io/v1
+              kind: ExternalSecret
+              metadata:
+                name: global-pullsecret
+                namespace: ""
+              spec:
+                refreshInterval: 1h
+                secretStoreRef:
+                  name: vault-backend
+                  kind: ClusterSecretStore
+                target:
+                  name: global-pullsecret
+                  creationPolicy: Owner
+                data:
+                  - secretKey: .dockerconfigjson
+                    remoteRef:
+                      key: pushsecrets/global-pull-secret
+                      property: content
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.secretStoreName
+          toFieldPath: spec.forProvider.manifest.spec.secretStoreRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.pullSecretVaultKey
+          toFieldPath: spec.forProvider.manifest.spec.data[0].remoteRef.key
+
+    # ──────────────────────────────────────────────────
+    # Install config secret
+    # ──────────────────────────────────────────────────
+    - name: install-config
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: ""
+                namespace: ""
+              type: Opaque
+              stringData:
+                install-config.yaml: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-install-config"
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.baseDomain
+              - fromFieldPath: spec.instanceType
+              - fromFieldPath: spec.rootVolumeType
+              - fromFieldPath: spec.clusterName
+              - fromFieldPath: spec.cloudRegion
+            strategy: string
+            string:
+              fmt: |
+                apiVersion: v1
+                baseDomain: %s
+                compute:
+                - architecture: amd64
+                  hyperthreading: Enabled
+                  name: worker
+                  platform:
+                    aws:
+                      type: %s
+                      rootVolume:
+                        size: 200
+                        type: %s
+                  replicas: 3
+                controlPlane:
+                  architecture: amd64
+                  hyperthreading: Enabled
+                  name: master
+                  platform:
+                    aws:
+                      type: m5.xlarge
+                      rootVolume:
+                        size: 200
+                        type: gp3
+                  replicas: 3
+                metadata:
+                  name: %s
+                networking:
+                  clusterNetwork:
+                  - cidr: 10.128.0.0/14
+                    hostPrefix: 23
+                  machineNetwork:
+                  - cidr: 10.0.0.0/16
+                  networkType: OVNKubernetes
+                  serviceNetwork:
+                  - 172.30.0.0/16
+                platform:
+                  aws:
+                    region: %s
+                pullSecret: ""
+          toFieldPath: spec.forProvider.manifest.stringData[install-config.yaml]
+
+    # ──────────────────────────────────────────────────
+    # ClusterDeployment
+    # ──────────────────────────────────────────────────
+    - name: cluster-deployment
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: hive.openshift.io/v1
+              kind: ClusterDeployment
+              metadata:
+                name: ""
+                namespace: ""
+                labels:
+                  cloud: AWS
+                  vendor: OpenShift
+                  cluster.open-cluster-management.io/clusterset: default
+              spec:
+                clusterName: ""
+                baseDomain: ""
+                installAttemptsLimit: 1
+                platform:
+                  aws:
+                    credentialsSecretRef:
+                      name: aws-creds
+                    region: us-east-2
+                provisioning:
+                  installConfigSecretRef:
+                    name: ""
+                  imageSetRef:
+                    name: ""
+                pullSecretRef:
+                  name: global-pullsecret
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.spec.clusterName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.baseDomain
+          toFieldPath: spec.forProvider.manifest.spec.baseDomain
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.manifest.metadata.labels.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-install-config"
+          toFieldPath: spec.forProvider.manifest.spec.provisioning.installConfigSecretRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterVersion
+          toFieldPath: spec.forProvider.manifest.spec.provisioning.imageSetRef.name
+
+    # ──────────────────────────────────────────────────
+    # MachinePool
+    # ──────────────────────────────────────────────────
+    - name: machine-pool
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: hive.openshift.io/v1
+              kind: MachinePool
+              metadata:
+                name: ""
+                namespace: ""
+              spec:
+                clusterDeploymentRef:
+                  name: ""
+                name: worker
+                platform:
+                  aws:
+                    rootVolume:
+                      iops: 100
+                      size: 200
+                      type: gp3
+                    type: m5.xlarge
+                replicas: 3
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-worker"
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.spec.clusterDeploymentRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.instanceType
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.type
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.workerReplicas
+          toFieldPath: spec.forProvider.manifest.spec.replicas
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.rootVolumeType
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rootVolume.type
+
+    # ──────────────────────────────────────────────────
+    # ManagedCluster (ACM registration)
+    # ──────────────────────────────────────────────────
+    - name: managed-cluster
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: cluster.open-cluster-management.io/v1
+              kind: ManagedCluster
+              metadata:
+                name: ""
+                labels:
+                  cloud: Amazon
+                  vendor: OpenShift
+                  cluster.open-cluster-management.io/clusterset: default
+                  clusterGroup: provisioned
+              spec:
+                hubAcceptsClient: true
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.name
+
+    # ──────────────────────────────────────────────────
+    # KlusterletAddonConfig
+    # ──────────────────────────────────────────────────
+    - name: klusterlet-addon
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: agent.open-cluster-management.io/v1
+              kind: KlusterletAddonConfig
+              metadata:
+                name: ""
+                namespace: ""
+              spec:
+                clusterName: ""
+                clusterNamespace: ""
+                clusterLabels:
+                  cloud: Amazon
+                  vendor: OpenShift
+                applicationManager:
+                  enabled: true
+                certPolicyController:
+                  enabled: true
+                iamPolicyController:
+                  enabled: true
+                policyController:
+                  enabled: true
+                searchCollector:
+                  enabled: true
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.spec.clusterName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.spec.clusterNamespace

@@ -1,0 +1,24 @@
+{{- range .Values.crossplane.providers.packages }}
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-{{ .name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: "{{ .package }}:{{ $.Values.crossplane.providers.version }}"
+  runtimeConfigRef:
+    name: aws-runtime-config
+{{- end }}
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: crossplane-provider-kubernetes
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  package: "{{ .Values.crossplane.kubernetesProvider.package }}:{{ .Values.crossplane.kubernetesProvider.version }}"
+  runtimeConfigRef:
+    name: aws-runtime-config

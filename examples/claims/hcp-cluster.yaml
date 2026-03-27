@@ -1,0 +1,35 @@
+apiVersion: legion.io/v1alpha1
+kind: LegionCluster
+metadata:
+  name: my-hcp-cluster
+  namespace: cluster-provisioning
+spec:
+  compositionRef:
+    name: hcp-aws
+  clusterType: hcp
+  clusterName: my-hcp-cluster
+  baseDomain: example.com
+  cloudRegion: us-east-2
+  clusterVersion: "4.17.0"
+  instanceType: m5.xlarge
+  workerReplicas: 2
+  rootVolumeSize: 120
+  rootVolumeType: gp3
+  networking:
+    vpcCidr: "10.0.0.0/16"
+    podCidr: "10.128.0.0/14"
+    serviceCidr: "172.30.0.0/16"
+    machineCidr: "10.0.0.0/16"
+    publicSubnet1Cidr: "10.0.0.0/20"
+    publicSubnet2Cidr: "10.0.16.0/20"
+    publicSubnet3Cidr: "10.0.32.0/20"
+    privateSubnet1Cidr: "10.0.128.0/20"
+    privateSubnet2Cidr: "10.0.144.0/20"
+    privateSubnet3Cidr: "10.0.160.0/20"
+  hypershift:
+    roleArn: "arn:aws:iam::123456789012:role/hypershift-cli-role"
+    endpointAccess: Public
+  credentials:
+    secretStoreName: vault-backend
+    awsCredsVaultKey: secret/data/hub/aws
+    pullSecretVaultKey: pushsecrets/global-pull-secret

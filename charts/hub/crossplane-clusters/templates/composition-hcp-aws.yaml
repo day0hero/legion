@@ -1,0 +1,1308 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: hcp-aws
+  labels:
+    legion.io/cluster-type: hcp
+    legion.io/cloud-provider: aws
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  compositeTypeRef:
+    apiVersion: legion.io/v1alpha1
+    kind: XLegionCluster
+  resources:
+    # ──────────────────────────────────────────────────
+    # VPC
+    # ──────────────────────────────────────────────────
+    - name: vpc
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: VPC
+        spec:
+          forProvider:
+            region: us-east-2
+            cidrBlock: "10.0.0.0/16"
+            enableDnsSupport: true
+            enableDnsHostnames: true
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.vpcCidr
+          toFieldPath: spec.forProvider.cidrBlock
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-vpc"
+          toFieldPath: spec.forProvider.tags.Name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.id
+          toFieldPath: status.vpcId
+
+    # ──────────────────────────────────────────────────
+    # Internet Gateway
+    # ──────────────────────────────────────────────────
+    - name: internet-gateway
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: InternetGateway
+        spec:
+          forProvider:
+            region: us-east-2
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-igw"
+          toFieldPath: spec.forProvider.tags.Name
+
+    # ──────────────────────────────────────────────────
+    # Public Subnets (3 AZs)
+    # ──────────────────────────────────────────────────
+    - name: public-subnet-1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            legion.io/subnet-type: public
+            legion.io/az-index: "1"
+        spec:
+          forProvider:
+            region: us-east-2
+            availabilityZone: us-east-2a
+            cidrBlock: "10.0.0.0/20"
+            mapPublicIpOnLaunch: true
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+              "kubernetes.io/role/elb": "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.cloudRegion
+            strategy: string
+            string:
+              fmt: "%sa"
+          toFieldPath: spec.forProvider.availabilityZone
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.publicSubnet1Cidr
+          toFieldPath: spec.forProvider.cidrBlock
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-public-1"
+          toFieldPath: spec.forProvider.tags.Name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.id
+          toFieldPath: status.publicSubnetIds
+          transforms:
+            - type: string
+              string:
+                type: Convert
+                convert: ToUpper
+          policy:
+            fromFieldPath: Optional
+
+    - name: public-subnet-2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            legion.io/subnet-type: public
+            legion.io/az-index: "2"
+        spec:
+          forProvider:
+            region: us-east-2
+            availabilityZone: us-east-2b
+            cidrBlock: "10.0.16.0/20"
+            mapPublicIpOnLaunch: true
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+              "kubernetes.io/role/elb": "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.cloudRegion
+            strategy: string
+            string:
+              fmt: "%sb"
+          toFieldPath: spec.forProvider.availabilityZone
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.publicSubnet2Cidr
+          toFieldPath: spec.forProvider.cidrBlock
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-public-2"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: public-subnet-3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            legion.io/subnet-type: public
+            legion.io/az-index: "3"
+        spec:
+          forProvider:
+            region: us-east-2
+            availabilityZone: us-east-2c
+            cidrBlock: "10.0.32.0/20"
+            mapPublicIpOnLaunch: true
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+              "kubernetes.io/role/elb": "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.cloudRegion
+            strategy: string
+            string:
+              fmt: "%sc"
+          toFieldPath: spec.forProvider.availabilityZone
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.publicSubnet3Cidr
+          toFieldPath: spec.forProvider.cidrBlock
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-public-3"
+          toFieldPath: spec.forProvider.tags.Name
+
+    # ──────────────────────────────────────────────────
+    # Private Subnets (3 AZs)
+    # ──────────────────────────────────────────────────
+    - name: private-subnet-1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            legion.io/subnet-type: private
+            legion.io/az-index: "1"
+        spec:
+          forProvider:
+            region: us-east-2
+            availabilityZone: us-east-2a
+            cidrBlock: "10.0.128.0/20"
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+              "kubernetes.io/role/internal-elb": "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.cloudRegion
+            strategy: string
+            string:
+              fmt: "%sa"
+          toFieldPath: spec.forProvider.availabilityZone
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.privateSubnet1Cidr
+          toFieldPath: spec.forProvider.cidrBlock
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-private-1"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: private-subnet-2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            legion.io/subnet-type: private
+            legion.io/az-index: "2"
+        spec:
+          forProvider:
+            region: us-east-2
+            availabilityZone: us-east-2b
+            cidrBlock: "10.0.144.0/20"
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+              "kubernetes.io/role/internal-elb": "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.cloudRegion
+            strategy: string
+            string:
+              fmt: "%sb"
+          toFieldPath: spec.forProvider.availabilityZone
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.privateSubnet2Cidr
+          toFieldPath: spec.forProvider.cidrBlock
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-private-2"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: private-subnet-3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            legion.io/subnet-type: private
+            legion.io/az-index: "3"
+        spec:
+          forProvider:
+            region: us-east-2
+            availabilityZone: us-east-2c
+            cidrBlock: "10.0.160.0/20"
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+              "kubernetes.io/role/internal-elb": "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.cloudRegion
+            strategy: string
+            string:
+              fmt: "%sc"
+          toFieldPath: spec.forProvider.availabilityZone
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.privateSubnet3Cidr
+          toFieldPath: spec.forProvider.cidrBlock
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-private-3"
+          toFieldPath: spec.forProvider.tags.Name
+
+    # ──────────────────────────────────────────────────
+    # Elastic IPs for NAT Gateways
+    # ──────────────────────────────────────────────────
+    - name: eip-nat-1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: EIP
+        metadata:
+          labels:
+            legion.io/az-index: "1"
+        spec:
+          forProvider:
+            region: us-east-2
+            domain: vpc
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-nat-eip-1"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: eip-nat-2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: EIP
+        metadata:
+          labels:
+            legion.io/az-index: "2"
+        spec:
+          forProvider:
+            region: us-east-2
+            domain: vpc
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-nat-eip-2"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: eip-nat-3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: EIP
+        metadata:
+          labels:
+            legion.io/az-index: "3"
+        spec:
+          forProvider:
+            region: us-east-2
+            domain: vpc
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-nat-eip-3"
+          toFieldPath: spec.forProvider.tags.Name
+
+    # ──────────────────────────────────────────────────
+    # NAT Gateways (one per AZ)
+    # ──────────────────────────────────────────────────
+    - name: nat-gateway-1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: NATGateway
+        spec:
+          forProvider:
+            region: us-east-2
+            connectivityType: public
+            allocationIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/az-index: "1"
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: public
+                legion.io/az-index: "1"
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-nat-1"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: nat-gateway-2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: NATGateway
+        spec:
+          forProvider:
+            region: us-east-2
+            connectivityType: public
+            allocationIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/az-index: "2"
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: public
+                legion.io/az-index: "2"
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-nat-2"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: nat-gateway-3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: NATGateway
+        spec:
+          forProvider:
+            region: us-east-2
+            connectivityType: public
+            allocationIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/az-index: "3"
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: public
+                legion.io/az-index: "3"
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-nat-3"
+          toFieldPath: spec.forProvider.tags.Name
+
+    # ──────────────────────────────────────────────────
+    # Route Tables
+    # ──────────────────────────────────────────────────
+    - name: public-route-table
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTable
+        metadata:
+          labels:
+            legion.io/route-table-type: public
+        spec:
+          forProvider:
+            region: us-east-2
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-public-rt"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: private-route-table-1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTable
+        metadata:
+          labels:
+            legion.io/route-table-type: private
+            legion.io/az-index: "1"
+        spec:
+          forProvider:
+            region: us-east-2
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-private-rt-1"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: private-route-table-2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTable
+        metadata:
+          labels:
+            legion.io/route-table-type: private
+            legion.io/az-index: "2"
+        spec:
+          forProvider:
+            region: us-east-2
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-private-rt-2"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: private-route-table-3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTable
+        metadata:
+          labels:
+            legion.io/route-table-type: private
+            legion.io/az-index: "3"
+        spec:
+          forProvider:
+            region: us-east-2
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-private-rt-3"
+          toFieldPath: spec.forProvider.tags.Name
+
+    # ──────────────────────────────────────────────────
+    # Routes
+    # ──────────────────────────────────────────────────
+    - name: public-route
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Route
+        spec:
+          forProvider:
+            region: us-east-2
+            destinationCidrBlock: "0.0.0.0/0"
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: public
+            gatewayIdSelector:
+              matchControllerRef: true
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    - name: private-route-1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Route
+        spec:
+          forProvider:
+            region: us-east-2
+            destinationCidrBlock: "0.0.0.0/0"
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: private
+                legion.io/az-index: "1"
+            natGatewayIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/az-index: "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    - name: private-route-2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Route
+        spec:
+          forProvider:
+            region: us-east-2
+            destinationCidrBlock: "0.0.0.0/0"
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: private
+                legion.io/az-index: "2"
+            natGatewayIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/az-index: "2"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    - name: private-route-3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Route
+        spec:
+          forProvider:
+            region: us-east-2
+            destinationCidrBlock: "0.0.0.0/0"
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: private
+                legion.io/az-index: "3"
+            natGatewayIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/az-index: "3"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    # ──────────────────────────────────────────────────
+    # Route Table Associations - Public
+    # ──────────────────────────────────────────────────
+    - name: public-rta-1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        spec:
+          forProvider:
+            region: us-east-2
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: public
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: public
+                legion.io/az-index: "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    - name: public-rta-2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        spec:
+          forProvider:
+            region: us-east-2
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: public
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: public
+                legion.io/az-index: "2"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    - name: public-rta-3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        spec:
+          forProvider:
+            region: us-east-2
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: public
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: public
+                legion.io/az-index: "3"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    # ──────────────────────────────────────────────────
+    # Route Table Associations - Private
+    # ──────────────────────────────────────────────────
+    - name: private-rta-1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        spec:
+          forProvider:
+            region: us-east-2
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: private
+                legion.io/az-index: "1"
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: private
+                legion.io/az-index: "1"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    - name: private-rta-2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        spec:
+          forProvider:
+            region: us-east-2
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: private
+                legion.io/az-index: "2"
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: private
+                legion.io/az-index: "2"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    - name: private-rta-3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        spec:
+          forProvider:
+            region: us-east-2
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/route-table-type: private
+                legion.io/az-index: "3"
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                legion.io/subnet-type: private
+                legion.io/az-index: "3"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    # ──────────────────────────────────────────────────
+    # Security Group for worker nodes
+    # ──────────────────────────────────────────────────
+    - name: worker-security-group
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: SecurityGroup
+        spec:
+          forProvider:
+            region: us-east-2
+            name: ""
+            description: "Security group for HCP worker nodes"
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-worker-sg"
+          toFieldPath: spec.forProvider.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-worker-sg"
+          toFieldPath: spec.forProvider.tags.Name
+
+    - name: worker-sg-egress
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: SecurityGroupRule
+        spec:
+          forProvider:
+            region: us-east-2
+            type: egress
+            fromPort: 0
+            toPort: 0
+            protocol: "-1"
+            cidrBlocks:
+              - "0.0.0.0/0"
+            securityGroupIdSelector:
+              matchControllerRef: true
+            description: "Allow all outbound traffic"
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.region
+
+    # ──────────────────────────────────────────────────
+    # Cluster namespace
+    # ──────────────────────────────────────────────────
+    - name: cluster-namespace
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: clusters
+          providerConfigRef:
+            name: default
+
+    # ──────────────────────────────────────────────────
+    # ExternalSecret: pull secret in clusters namespace
+    # ──────────────────────────────────────────────────
+    - name: pull-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: external-secrets.io/v1
+              kind: ExternalSecret
+              metadata:
+                name: ""
+                namespace: clusters
+              spec:
+                refreshInterval: 1h
+                secretStoreRef:
+                  name: vault-backend
+                  kind: ClusterSecretStore
+                target:
+                  name: ""
+                  creationPolicy: Owner
+                data:
+                  - secretKey: .dockerconfigjson
+                    remoteRef:
+                      key: pushsecrets/global-pull-secret
+                      property: content
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-pull-secret"
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-pull-secret"
+          toFieldPath: spec.forProvider.manifest.spec.target.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.secretStoreName
+          toFieldPath: spec.forProvider.manifest.spec.secretStoreRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.pullSecretVaultKey
+          toFieldPath: spec.forProvider.manifest.spec.data[0].remoteRef.key
+
+    # ──────────────────────────────────────────────────
+    # ExternalSecret: AWS credentials in clusters namespace
+    # ──────────────────────────────────────────────────
+    - name: aws-creds-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: external-secrets.io/v1
+              kind: ExternalSecret
+              metadata:
+                name: ""
+                namespace: clusters
+              spec:
+                refreshInterval: 1h
+                secretStoreRef:
+                  name: vault-backend
+                  kind: ClusterSecretStore
+                target:
+                  name: ""
+                  creationPolicy: Owner
+                data:
+                  - secretKey: aws_access_key_id
+                    remoteRef:
+                      key: secret/data/hub/aws
+                      property: aws_access_key_id
+                  - secretKey: aws_secret_access_key
+                    remoteRef:
+                      key: secret/data/hub/aws
+                      property: aws_secret_access_key
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-creds"
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-aws-creds"
+          toFieldPath: spec.forProvider.manifest.spec.target.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.secretStoreName
+          toFieldPath: spec.forProvider.manifest.spec.secretStoreRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.awsCredsVaultKey
+          toFieldPath: spec.forProvider.manifest.spec.data[0].remoteRef.key
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentials.awsCredsVaultKey
+          toFieldPath: spec.forProvider.manifest.spec.data[1].remoteRef.key
+
+    # ──────────────────────────────────────────────────
+    # HostedCluster
+    # ──────────────────────────────────────────────────
+    - name: hosted-cluster
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: hypershift.openshift.io/v1beta1
+              kind: HostedCluster
+              metadata:
+                name: ""
+                namespace: clusters
+                labels:
+                  vendor: OpenShift
+                  cluster.open-cluster-management.io/clusterset: default
+              spec:
+                release:
+                  image: ""
+                pullSecret:
+                  name: ""
+                sshKey:
+                  name: ""
+                networking:
+                  clusterNetwork:
+                    - cidr: "10.128.0.0/14"
+                  serviceNetwork:
+                    - cidr: "172.30.0.0/16"
+                  networkType: OVNKubernetes
+                  machineNetwork:
+                    - cidr: "10.0.0.0/16"
+                platform:
+                  type: AWS
+                  aws:
+                    region: us-east-2
+                    endpointAccess: Public
+                    cloudProviderConfig:
+                      vpc:
+                        id: ""
+                      subnet:
+                        filters:
+                          - name: "tag:kubernetes.io/role/internal-elb"
+                            values:
+                              - "1"
+                    rolesRef:
+                      controlPlaneOperatorARN: ""
+                      imageRegistryARN: ""
+                      ingressARN: ""
+                      kubeCloudControllerARN: ""
+                      networkARN: ""
+                      nodePoolManagementARN: ""
+                      storageARN: ""
+                infraID: ""
+                dns:
+                  baseDomain: ""
+                fips: false
+                issuerURL: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.spec.infraID
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.baseDomain
+          toFieldPath: spec.forProvider.manifest.spec.dns.baseDomain
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cloudRegion
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.region
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterVersion
+            strategy: string
+            string:
+              fmt: "quay.io/openshift-release-dev/ocp-release:%s-x86_64"
+          toFieldPath: spec.forProvider.manifest.spec.release.image
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-pull-secret"
+          toFieldPath: spec.forProvider.manifest.spec.pullSecret.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.podCidr
+          toFieldPath: spec.forProvider.manifest.spec.networking.clusterNetwork[0].cidr
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.serviceCidr
+          toFieldPath: spec.forProvider.manifest.spec.networking.serviceNetwork[0].cidr
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.networking.machineCidr
+          toFieldPath: spec.forProvider.manifest.spec.networking.machineNetwork[0].cidr
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hypershift.endpointAccess
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.endpointAccess
+        - type: FromCompositeFieldPath
+          fromFieldPath: status.vpcId
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.vpc.id
+          policy:
+            fromFieldPath: Required
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hypershift.roleArn
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.controlPlaneOperatorARN
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hypershift.roleArn
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.imageRegistryARN
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hypershift.roleArn
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.ingressARN
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hypershift.roleArn
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.kubeCloudControllerARN
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hypershift.roleArn
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.networkARN
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hypershift.roleArn
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.nodePoolManagementARN
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hypershift.roleArn
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.storageARN
+
+    # ──────────────────────────────────────────────────
+    # NodePool
+    # ──────────────────────────────────────────────────
+    - name: node-pool
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: hypershift.openshift.io/v1beta1
+              kind: NodePool
+              metadata:
+                name: ""
+                namespace: clusters
+              spec:
+                clusterName: ""
+                replicas: 3
+                management:
+                  autoRepair: true
+                  upgradeType: Replace
+                platform:
+                  type: AWS
+                  aws:
+                    instanceType: m5.xlarge
+                    rootVolume:
+                      size: 120
+                      type: gp3
+                    subnetID: ""
+                release:
+                  image: ""
+          providerConfigRef:
+            name: default
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterName
+            strategy: string
+            string:
+              fmt: "%s-workers"
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.clusterName
+          toFieldPath: spec.forProvider.manifest.spec.clusterName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.workerReplicas
+          toFieldPath: spec.forProvider.manifest.spec.replicas
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.instanceType
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.instanceType
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.rootVolumeSize
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rootVolume.size
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.rootVolumeType
+          toFieldPath: spec.forProvider.manifest.spec.platform.aws.rootVolume.type
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.clusterVersion
+            strategy: string
+            string:
+              fmt: "quay.io/openshift-release-dev/ocp-release:%s-x86_64"
+          toFieldPath: spec.forProvider.manifest.spec.release.image

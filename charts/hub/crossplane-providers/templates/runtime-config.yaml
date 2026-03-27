@@ -1,0 +1,16 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: aws-runtime-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              securityContext: {}
+          securityContext: {}

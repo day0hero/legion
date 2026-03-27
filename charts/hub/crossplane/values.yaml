@@ -1,0 +1,11 @@
+crossplane:
+  securityContextCrossplane:
+    runAsUser: null
+    runAsGroup: null
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+  securityContextRBACManager:
+    runAsUser: null
+    runAsGroup: null
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true

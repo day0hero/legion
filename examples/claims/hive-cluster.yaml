@@ -1,0 +1,23 @@
+apiVersion: legion.io/v1alpha1
+kind: LegionCluster
+metadata:
+  name: my-hive-cluster
+  namespace: cluster-provisioning
+spec:
+  compositionRef:
+    name: hive-aws
+  clusterType: hive
+  clusterName: my-hive-cluster
+  baseDomain: example.com
+  cloudRegion: us-east-2
+  clusterVersion: img4.21.6-x86-64-appsub
+  instanceType: m5.xlarge
+  workerReplicas: 3
+  controlPlaneReplicas: 3
+  controlPlaneMachineType: m5.xlarge
+  rootVolumeSize: 200
+  rootVolumeType: gp3
+  credentials:
+    secretStoreName: vault-backend
+    awsCredsVaultKey: secret/data/hub/aws
+    pullSecretVaultKey: pushsecrets/global-pull-secret

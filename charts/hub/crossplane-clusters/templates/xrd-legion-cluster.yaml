@@ -1,0 +1,175 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xlegionclusters.legion.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  group: legion.io
+  names:
+    kind: XLegionCluster
+    plural: xlegionclusters
+  claimNames:
+    kind: LegionCluster
+    plural: legionclusters
+  defaultCompositionUpdatePolicy: Automatic
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - clusterName
+                - baseDomain
+                - cloudRegion
+              properties:
+                clusterType:
+                  type: string
+                  description: "Cluster provisioning type: hive (IPI) or hcp (HyperShift hosted control plane)"
+                  enum:
+                    - hive
+                    - hcp
+                  default: hive
+                clusterName:
+                  type: string
+                  description: "Name of the cluster to provision"
+                baseDomain:
+                  type: string
+                  description: "Base DNS domain for the cluster"
+                cloudRegion:
+                  type: string
+                  description: "AWS region for the cluster"
+                  default: us-east-2
+                clusterVersion:
+                  type: string
+                  description: "ClusterImageSet name (Hive) or release image tag (HCP)"
+                  default: "img4.21.6-x86-64-appsub"
+                instanceType:
+                  type: string
+                  description: "EC2 instance type for worker nodes"
+                  default: m5.xlarge
+                workerReplicas:
+                  type: integer
+                  description: "Number of worker node replicas"
+                  default: 3
+                controlPlaneReplicas:
+                  type: integer
+                  description: "Number of control plane replicas (Hive only)"
+                  default: 3
+                controlPlaneMachineType:
+                  type: string
+                  description: "EC2 instance type for control plane nodes (Hive only)"
+                  default: m5.xlarge
+                rootVolumeSize:
+                  type: integer
+                  description: "Root volume size in GB"
+                  default: 120
+                rootVolumeType:
+                  type: string
+                  description: "Root volume EBS type"
+                  default: gp3
+                networking:
+                  type: object
+                  description: "Network configuration for the cluster"
+                  properties:
+                    vpcCidr:
+                      type: string
+                      description: "CIDR block for the VPC (HCP only - Hive creates its own)"
+                      default: "10.0.0.0/16"
+                    podCidr:
+                      type: string
+                      default: "10.128.0.0/14"
+                    serviceCidr:
+                      type: string
+                      default: "172.30.0.0/16"
+                    machineCidr:
+                      type: string
+                      default: "10.0.0.0/16"
+                    hostPrefix:
+                      type: integer
+                      default: 23
+                    publicSubnet1Cidr:
+                      type: string
+                      default: "10.0.0.0/20"
+                    publicSubnet2Cidr:
+                      type: string
+                      default: "10.0.16.0/20"
+                    publicSubnet3Cidr:
+                      type: string
+                      default: "10.0.32.0/20"
+                    privateSubnet1Cidr:
+                      type: string
+                      default: "10.0.128.0/20"
+                    privateSubnet2Cidr:
+                      type: string
+                      default: "10.0.144.0/20"
+                    privateSubnet3Cidr:
+                      type: string
+                      default: "10.0.160.0/20"
+                hypershift:
+                  type: object
+                  description: "HyperShift-specific configuration"
+                  properties:
+                    roleArn:
+                      type: string
+                      description: "IAM role ARN for HyperShift CLI"
+                    endpointAccess:
+                      type: string
+                      description: "API endpoint access type"
+                      enum:
+                        - Public
+                        - Private
+                        - PublicAndPrivate
+                      default: Public
+                credentials:
+                  type: object
+                  description: "Credential references for cluster provisioning"
+                  properties:
+                    namespace:
+                      type: string
+                      description: "Namespace where credential secrets reside"
+                      default: cluster-provisioning
+                    pullSecretName:
+                      type: string
+                      description: "Name of the pull secret"
+                      default: pullsecret-cluster-cluster-provisioning
+                    awsCredsSecretName:
+                      type: string
+                      description: "Name of the AWS credentials secret"
+                      default: aws-creds
+                    secretStoreName:
+                      type: string
+                      description: "ClusterSecretStore name for ESO"
+                      default: vault-backend
+                    awsCredsVaultKey:
+                      type: string
+                      description: "Vault path for AWS credentials"
+                      default: secret/data/hub/aws
+                    pullSecretVaultKey:
+                      type: string
+                      description: "Vault path for pull secret"
+                      default: pushsecrets/global-pull-secret
+            status:
+              type: object
+              properties:
+                vpcId:
+                  type: string
+                  description: "VPC ID (HCP clusters)"
+                publicSubnetIds:
+                  type: string
+                  description: "Comma-separated public subnet IDs"
+                privateSubnetIds:
+                  type: string
+                  description: "Comma-separated private subnet IDs"
+                clusterStatus:
+                  type: string
+                  description: "Current status of the cluster"
+                message:
+                  type: string
+                  description: "Human-readable status message"

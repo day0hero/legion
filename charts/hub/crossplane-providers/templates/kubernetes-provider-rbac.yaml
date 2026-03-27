@@ -1,0 +1,40 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossplane-kubernetes-provider-legion
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "secrets", "configmaps", "serviceaccounts"]
+    verbs: ["*"]
+  - apiGroups: ["hive.openshift.io"]
+    resources: ["clusterdeployments", "machinepools", "clusterimagesets"]
+    verbs: ["*"]
+  - apiGroups: ["hypershift.openshift.io"]
+    resources: ["hostedclusters", "nodepools"]
+    verbs: ["*"]
+  - apiGroups: ["cluster.open-cluster-management.io"]
+    resources: ["managedclusters", "managedclustersets"]
+    verbs: ["*"]
+  - apiGroups: ["agent.open-cluster-management.io"]
+    resources: ["klusterletaddonconfigs"]
+    verbs: ["*"]
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: crossplane-kubernetes-provider-legion
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: crossplane-kubernetes-provider-legion
+subjects:
+  - kind: ServiceAccount
+    name: crossplane-provider-kubernetes-*
+    namespace: crossplane-system
