@@ -13,6 +13,7 @@ clusterGroup:
     - cert-manager-operator
     - legion-monitoring
     - crossplane-system
+    - clusters
 #    - ack-system
 
   operatorgroupExcludes:
