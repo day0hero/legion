@@ -10,6 +10,7 @@ clusterGroup:
     - cluster-provisioning
     - cert-manager-operator
     - legion-monitoring
+    - crossplane-system
 #    - ack-system
 
   operatorgroupExcludes:
@@ -40,6 +41,7 @@ clusterGroup:
   argoProjects:
     - hub
     - infrastructure
+    - crossplane
 #    - s3
 
   applications:
@@ -106,6 +108,24 @@ clusterGroup:
       namespace: openshift-machine-api
       argoProject: infrastructure
       path: charts/hub/cluster-autoscaler
+
+    crossplane:
+      name: crossplane
+      namespace: crossplane-system
+      argoProject: crossplane
+      path: charts/hub/crossplane
+
+    crossplane-providers:
+      name: crossplane-providers
+      namespace: crossplane-system
+      argoProject: crossplane
+      path: charts/hub/crossplane-providers
+
+    crossplane-clusters:
+      name: crossplane-clusters
+      namespace: crossplane-system
+      argoProject: crossplane
+      path: charts/hub/crossplane-clusters
 
 #    ack-s3:
 #      name: ack-s3

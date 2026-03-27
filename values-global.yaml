@@ -11,3 +11,13 @@ main:
   multiSourceConfig:
     enabled: true
     clusterGroupChartVersion: 0.9.*
+
+crossplane:
+  providers:
+    version: v2.4.0
+  kubernetesProvider:
+    version: v0.16.0
+  providerConfig:
+    name: default
+    credentials:
+      fromVault: true
