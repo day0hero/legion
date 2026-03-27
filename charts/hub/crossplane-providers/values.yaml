@@ -10,6 +10,8 @@ global:
           package: xpkg.upbound.io/upbound/provider-aws-ec2
         - name: provider-aws-s3
           package: xpkg.upbound.io/upbound/provider-aws-s3
+        - name: provider-aws-iam
+          package: xpkg.upbound.io/upbound/provider-aws-iam
 
     kubernetesProvider:
       version: v1.2.1

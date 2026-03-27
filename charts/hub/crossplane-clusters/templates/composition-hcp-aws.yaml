@@ -118,9 +118,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.cloudRegion
+                    - fromFieldPath: spec.networking.az1Suffix
                   strategy: string
                   string:
-                    fmt: "%sa"
+                    fmt: "%s%s"
                 toFieldPath: spec.forProvider.availabilityZone
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.networking.publicSubnet1Cidr
@@ -163,9 +164,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.cloudRegion
+                    - fromFieldPath: spec.networking.az2Suffix
                   strategy: string
                   string:
-                    fmt: "%sb"
+                    fmt: "%s%s"
                 toFieldPath: spec.forProvider.availabilityZone
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.networking.publicSubnet2Cidr
@@ -208,9 +210,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.cloudRegion
+                    - fromFieldPath: spec.networking.az3Suffix
                   strategy: string
                   string:
-                    fmt: "%sc"
+                    fmt: "%s%s"
                 toFieldPath: spec.forProvider.availabilityZone
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.networking.publicSubnet3Cidr
@@ -255,9 +258,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.cloudRegion
+                    - fromFieldPath: spec.networking.az1Suffix
                   strategy: string
                   string:
-                    fmt: "%sa"
+                    fmt: "%s%s"
                 toFieldPath: spec.forProvider.availabilityZone
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.networking.privateSubnet1Cidr
@@ -299,9 +303,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.cloudRegion
+                    - fromFieldPath: spec.networking.az2Suffix
                   strategy: string
                   string:
-                    fmt: "%sb"
+                    fmt: "%s%s"
                 toFieldPath: spec.forProvider.availabilityZone
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.networking.privateSubnet2Cidr
@@ -343,9 +348,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.cloudRegion
+                    - fromFieldPath: spec.networking.az3Suffix
                   strategy: string
                   string:
-                    fmt: "%sc"
+                    fmt: "%s%s"
                 toFieldPath: spec.forProvider.availabilityZone
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.networking.privateSubnet3Cidr
@@ -976,6 +982,478 @@ spec:
                 toFieldPath: spec.forProvider.region
 
           # ──────────────────────────────────────────────────
+          # OIDC provider (HyperShift S3 issuer)
+          # ──────────────────────────────────────────────────
+          - name: oidc-provider
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: OpenIDConnectProvider
+              spec:
+                forProvider:
+                  url: ""
+                  clientIdList:
+                    - "openshift"
+                    - "sts.amazonaws.com"
+                  thumbprintList:
+                    - "a9d53002e97e00ab26eb159de1eb52e1a710c279"
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "https://%s.s3.%s.amazonaws.com/%s"
+                toFieldPath: spec.forProvider.url
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.oidcProviderArn
+
+          # ──────────────────────────────────────────────────
+          # IAM roles (OIDC trust)
+          # ──────────────────────────────────────────────────
+          - name: iam-role-control-plane-operator
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  legion.io/role-type: "control-plane-operator"
+              spec:
+                forProvider:
+                  name: ""
+                  assumeRolePolicy: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-control-plane-operator"
+                toFieldPath: spec.forProvider.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.awsAccountId
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                toFieldPath: spec.forProvider.assumeRolePolicy
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.controlPlaneOperatorRoleArn
+
+          - name: iam-role-image-registry
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  legion.io/role-type: "image-registry"
+              spec:
+                forProvider:
+                  name: ""
+                  assumeRolePolicy: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-image-registry"
+                toFieldPath: spec.forProvider.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.awsAccountId
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                toFieldPath: spec.forProvider.assumeRolePolicy
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.imageRegistryRoleArn
+
+          - name: iam-role-ingress
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  legion.io/role-type: "ingress"
+              spec:
+                forProvider:
+                  name: ""
+                  assumeRolePolicy: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-ingress"
+                toFieldPath: spec.forProvider.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.awsAccountId
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                toFieldPath: spec.forProvider.assumeRolePolicy
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.ingressRoleArn
+
+          - name: iam-role-kube-cloud-controller
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  legion.io/role-type: "kube-cloud-controller"
+              spec:
+                forProvider:
+                  name: ""
+                  assumeRolePolicy: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-kube-cloud-controller"
+                toFieldPath: spec.forProvider.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.awsAccountId
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                toFieldPath: spec.forProvider.assumeRolePolicy
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.kubeCloudControllerRoleArn
+
+          - name: iam-role-network
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  legion.io/role-type: "network"
+              spec:
+                forProvider:
+                  name: ""
+                  assumeRolePolicy: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-network"
+                toFieldPath: spec.forProvider.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.awsAccountId
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                toFieldPath: spec.forProvider.assumeRolePolicy
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.networkRoleArn
+
+          - name: iam-role-node-pool-management
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  legion.io/role-type: "node-pool-management"
+              spec:
+                forProvider:
+                  name: ""
+                  assumeRolePolicy: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-node-pool-management"
+                toFieldPath: spec.forProvider.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.awsAccountId
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                toFieldPath: spec.forProvider.assumeRolePolicy
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.nodePoolManagementRoleArn
+
+          - name: iam-role-storage
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  legion.io/role-type: "storage"
+              spec:
+                forProvider:
+                  name: ""
+                  assumeRolePolicy: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-storage"
+                toFieldPath: spec.forProvider.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.awsAccountId
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                toFieldPath: spec.forProvider.assumeRolePolicy
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.storageRoleArn
+
+          # ──────────────────────────────────────────────────
+          # IAM inline policies per role
+          # ──────────────────────────────────────────────────
+          - name: iam-policy-control-plane-operator
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicy
+              spec:
+                forProvider:
+                  name: ""
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      legion.io/role-type: "control-plane-operator"
+                  policy: |
+                    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["ec2:CreateVpcEndpoint","ec2:DescribeVpcEndpoints","ec2:ModifyVpcEndpoint","ec2:DeleteVpcEndpoints","ec2:CreateTags","route53:ListHostedZones","ec2:CreateSecurityGroup","ec2:AuthorizeSecurityGroupIngress","ec2:AuthorizeSecurityGroupEgress","ec2:DeleteSecurityGroup","ec2:RevokeSecurityGroupIngress","ec2:RevokeSecurityGroupEgress","ec2:DescribeSecurityGroups","ec2:DescribeVpcs","route53:ChangeResourceRecordSets","route53:ListResourceRecordSets"],"Resource":"*"}]}
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-control-plane-operator-policy"
+                toFieldPath: spec.forProvider.name
+
+          - name: iam-policy-image-registry
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicy
+              spec:
+                forProvider:
+                  name: ""
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      legion.io/role-type: "image-registry"
+                  policy: |
+                    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:CreateBucket","s3:DeleteBucket","s3:PutBucketTagging","s3:GetBucketTagging","s3:PutBucketPublicAccessBlock","s3:GetBucketPublicAccessBlock","s3:PutEncryptionConfiguration","s3:GetEncryptionConfiguration","s3:PutLifecycleConfiguration","s3:GetLifecycleConfiguration","s3:GetBucketLocation","s3:ListBucket","s3:GetObject","s3:PutObject","s3:DeleteObject","s3:ListBucketMultipartUploads","s3:AbortMultipartUpload","s3:ListMultipartUploadParts"],"Resource":"*"}]}
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-image-registry-policy"
+                toFieldPath: spec.forProvider.name
+
+          - name: iam-policy-ingress
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicy
+              spec:
+                forProvider:
+                  name: ""
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      legion.io/role-type: "ingress"
+                  policy: |
+                    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["elasticloadbalancing:DescribeLoadBalancers","tag:GetResources","route53:ListHostedZones","route53:ChangeResourceRecordSets"],"Resource":"*"}]}
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-ingress-policy"
+                toFieldPath: spec.forProvider.name
+
+          - name: iam-policy-kube-cloud-controller
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicy
+              spec:
+                forProvider:
+                  name: ""
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      legion.io/role-type: "kube-cloud-controller"
+                  policy: |
+                    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["ec2:*","elasticloadbalancing:*","iam:CreateServiceLinkedRole","kms:DescribeKey"],"Resource":"*"}]}
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-kube-cloud-controller-policy"
+                toFieldPath: spec.forProvider.name
+
+          - name: iam-policy-network
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicy
+              spec:
+                forProvider:
+                  name: ""
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      legion.io/role-type: "network"
+                  policy: |
+                    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["ec2:DescribeInstances","ec2:DescribeInstanceStatus","ec2:DescribeInstanceTypes","ec2:UnassignPrivateIpAddresses","ec2:AssignPrivateIpAddresses","ec2:UnassignIpv6Addresses","ec2:AssignIpv6Addresses","ec2:DescribeSubnets","ec2:DescribeNetworkInterfaces"],"Resource":"*"}]}
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-network-policy"
+                toFieldPath: spec.forProvider.name
+
+          - name: iam-policy-node-pool-management
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicy
+              spec:
+                forProvider:
+                  name: ""
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      legion.io/role-type: "node-pool-management"
+                  policy: |
+                    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["ec2:*","elasticloadbalancing:*","iam:PassRole","iam:CreateServiceLinkedRole","kms:Decrypt","kms:ReEncrypt","kms:GenerateDataKeyWithoutPlainText","kms:DescribeKey","kms:CreateGrant"],"Resource":"*"}]}
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-node-pool-management-policy"
+                toFieldPath: spec.forProvider.name
+
+          - name: iam-policy-storage
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicy
+              spec:
+                forProvider:
+                  name: ""
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      legion.io/role-type: "storage"
+                  policy: |
+                    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["ec2:AttachVolume","ec2:CreateSnapshot","ec2:CreateTags","ec2:CreateVolume","ec2:DeleteSnapshot","ec2:DeleteTags","ec2:DeleteVolume","ec2:DescribeInstances","ec2:DescribeSnapshots","ec2:DescribeTags","ec2:DescribeVolumes","ec2:DescribeVolumesModifications","ec2:DetachVolume","ec2:ModifyVolume"],"Resource":"*"}]}
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-storage-policy"
+                toFieldPath: spec.forProvider.name
+
+          # ──────────────────────────────────────────────────
           # Cluster namespace
           # ──────────────────────────────────────────────────
           - name: cluster-namespace
@@ -1172,6 +1650,7 @@ spec:
                           servicePublishingStrategy:
                             type: Route
                       infraID: ""
+                      issuerURL: ""
                       dns:
                         baseDomain: ""
                       fips: false
@@ -1223,27 +1702,51 @@ spec:
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.vpc
                 policy:
                   fromFieldPath: Required
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "https://%s.s3.%s.amazonaws.com/%s"
+                toFieldPath: spec.forProvider.manifest.spec.issuerURL
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.hypershift.roleArn
+                fromFieldPath: status.controlPlaneOperatorRoleArn
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.controlPlaneOperatorARN
+                policy:
+                  fromFieldPath: Required
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.hypershift.roleArn
+                fromFieldPath: status.imageRegistryRoleArn
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.imageRegistryARN
+                policy:
+                  fromFieldPath: Required
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.hypershift.roleArn
+                fromFieldPath: status.ingressRoleArn
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.ingressARN
+                policy:
+                  fromFieldPath: Required
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.hypershift.roleArn
+                fromFieldPath: status.kubeCloudControllerRoleArn
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.kubeCloudControllerARN
+                policy:
+                  fromFieldPath: Required
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.hypershift.roleArn
+                fromFieldPath: status.networkRoleArn
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.networkARN
+                policy:
+                  fromFieldPath: Required
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.hypershift.roleArn
+                fromFieldPath: status.nodePoolManagementRoleArn
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.nodePoolManagementARN
+                policy:
+                  fromFieldPath: Required
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.hypershift.roleArn
+                fromFieldPath: status.storageRoleArn
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.rolesRef.storageARN
+                policy:
+                  fromFieldPath: Required
 
           # ──────────────────────────────────────────────────
           # NodePool

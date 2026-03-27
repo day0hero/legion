@@ -80,7 +80,7 @@ spec:
                   properties:
                     vpcCidr:
                       type: string
-                      description: "CIDR block for the VPC (HCP only - Hive creates its own)"
+                      description: "CIDR block for the VPC (HCP only)"
                       default: "10.0.0.0/16"
                     podCidr:
                       type: string
@@ -94,6 +94,18 @@ spec:
                     hostPrefix:
                       type: integer
                       default: 23
+                    az1Suffix:
+                      type: string
+                      description: "First AZ suffix (appended to cloudRegion, e.g. 'a' -> us-east-2a)"
+                      default: "a"
+                    az2Suffix:
+                      type: string
+                      description: "Second AZ suffix"
+                      default: "b"
+                    az3Suffix:
+                      type: string
+                      description: "Third AZ suffix"
+                      default: "c"
                     publicSubnet1Cidr:
                       type: string
                       default: "10.0.0.0/20"
@@ -116,9 +128,17 @@ spec:
                   type: object
                   description: "HyperShift-specific configuration"
                   properties:
-                    roleArn:
+                    awsAccountId:
                       type: string
-                      description: "IAM role ARN for HyperShift CLI"
+                      description: "AWS account ID for IAM resource creation"
+                    oidcBucketName:
+                      type: string
+                      description: "S3 bucket name for OIDC discovery documents"
+                      default: "legion-hypershift-oidc"
+                    oidcBucketRegion:
+                      type: string
+                      description: "S3 bucket region for OIDC"
+                      default: "us-east-2"
                     endpointAccess:
                       type: string
                       description: "API endpoint access type"
@@ -161,12 +181,23 @@ spec:
                 vpcId:
                   type: string
                   description: "VPC ID (HCP clusters)"
-                publicSubnetIds:
+                oidcProviderArn:
                   type: string
-                  description: "Comma-separated public subnet IDs"
-                privateSubnetIds:
+                  description: "ARN of the IAM OIDC provider"
+                controlPlaneOperatorRoleArn:
                   type: string
-                  description: "Comma-separated private subnet IDs"
+                imageRegistryRoleArn:
+                  type: string
+                ingressRoleArn:
+                  type: string
+                kubeCloudControllerRoleArn:
+                  type: string
+                networkRoleArn:
+                  type: string
+                nodePoolManagementRoleArn:
+                  type: string
+                storageRoleArn:
+                  type: string
                 clusterStatus:
                   type: string
                   description: "Current status of the cluster"

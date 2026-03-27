@@ -17,17 +17,14 @@ spec:
   rootVolumeType: gp3
   networking:
     vpcCidr: "10.0.0.0/16"
-    podCidr: "10.128.0.0/14"
-    serviceCidr: "172.30.0.0/16"
-    machineCidr: "10.0.0.0/16"
-    publicSubnet1Cidr: "10.0.0.0/20"
-    publicSubnet2Cidr: "10.0.16.0/20"
-    publicSubnet3Cidr: "10.0.32.0/20"
-    privateSubnet1Cidr: "10.0.128.0/20"
-    privateSubnet2Cidr: "10.0.144.0/20"
-    privateSubnet3Cidr: "10.0.160.0/20"
+    # AZ suffixes default to a, b, c -- override for 2-AZ regions:
+    # az1Suffix: "b"
+    # az2Suffix: "c"
+    # az3Suffix: "c"
   hypershift:
-    roleArn: "arn:aws:iam::123456789012:role/hypershift-cli-role"
+    awsAccountId: "123456789012"
+    oidcBucketName: legion-hypershift-oidc
+    oidcBucketRegion: us-east-2
     endpointAccess: Public
   credentials:
     secretStoreName: vault-backend
