@@ -117,7 +117,7 @@ spec:
                         - secretKey: .dockerconfigjson
                           remoteRef:
                             key: pushsecrets/global-pull-secret
-                            property: content
+                            property: docker
                 providerConfigRef:
                   name: default
             patches:
