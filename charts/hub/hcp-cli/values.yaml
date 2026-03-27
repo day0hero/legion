@@ -10,7 +10,7 @@ buildConfig:
   # Schedule periodic rebuilds to pick up new hcp versions (cron format, empty to disable)
   schedule: ""
   # Internal service that serves the hcp CLI binaries (runs in the multicluster-engine namespace)
-  hcpDownloadService: hcp-cli-download.multicluster-engine.svc
+  hcpDownloadService: hcp-cli-download.multicluster-engine.svc.cluster.local
 
 serviceAccount:
   # SA used by the BuildConfig — needs permission to read consoleclidownloads
