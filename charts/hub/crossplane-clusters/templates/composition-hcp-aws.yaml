@@ -1673,6 +1673,7 @@ spec:
                           endpointAccess: Public
                           cloudProviderConfig:
                             vpc: ""
+                            zone: ""
                             subnet:
                               filters:
                                 - name: "tag:kubernetes.io/role/internal-elb"
@@ -1752,6 +1753,15 @@ spec:
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.vpc
                 policy:
                   fromFieldPath: Required
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.cloudRegion
+                    - fromFieldPath: spec.networking.az1Suffix
+                  strategy: string
+                  string:
+                    fmt: "%s%s"
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.zone
               - type: CombineFromComposite
                 combine:
                   variables:
