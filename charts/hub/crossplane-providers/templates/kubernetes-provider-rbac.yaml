@@ -35,6 +35,6 @@ roleRef:
   kind: ClusterRole
   name: crossplane-kubernetes-provider-legion
 subjects:
-  - kind: ServiceAccount
-    name: crossplane-provider-kubernetes-*
-    namespace: crossplane-system
+  - kind: Group
+    name: system:serviceaccounts:crossplane-system
+    apiGroup: rbac.authorization.k8s.io
