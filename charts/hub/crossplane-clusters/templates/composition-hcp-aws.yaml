@@ -1130,8 +1130,6 @@ spec:
                         image: ""
                       pullSecret:
                         name: ""
-                      sshKey:
-                        name: ""
                       networking:
                         clusterNetwork:
                           - cidr: "10.128.0.0/14"
@@ -1160,11 +1158,23 @@ spec:
                             networkARN: ""
                             nodePoolManagementARN: ""
                             storageARN: ""
+                      services:
+                        - service: APIServer
+                          servicePublishingStrategy:
+                            type: LoadBalancer
+                        - service: OAuthServer
+                          servicePublishingStrategy:
+                            type: Route
+                        - service: Konnectivity
+                          servicePublishingStrategy:
+                            type: Route
+                        - service: Ignition
+                          servicePublishingStrategy:
+                            type: Route
                       infraID: ""
                       dns:
                         baseDomain: ""
                       fips: false
-                      issuerURL: ""
                 providerConfigRef:
                   name: default
             patches:
