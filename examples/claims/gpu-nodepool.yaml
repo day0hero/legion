@@ -1,0 +1,32 @@
+# GPU-accelerated NodePool with autoscaling for ML/AI workloads
+apiVersion: legion.io/v1alpha1
+kind: LegionNodePool
+metadata:
+  name: my-hcp-cluster-gpu
+  namespace: cluster-provisioning
+spec:
+  compositionRef:
+    name: nodepool-aws
+  clusterName: my-hcp-cluster
+  poolName: gpu
+  replicas: 1
+  instanceType: g5.2xlarge
+  releaseImage: "4.17.0"
+  rootVolume:
+    size: 200
+    type: gp3
+    iops: 6000
+  autoScaling:
+    enabled: true
+    min: 0
+    max: 4
+  labels:
+    nvidia.com/gpu.present: "true"
+    node-role.kubernetes.io/gpu: ""
+  taints:
+    - key: nvidia.com/gpu
+      value: "true"
+      effect: NoSchedule
+  management:
+    autoRepair: true
+    upgradeType: Replace

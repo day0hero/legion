@@ -1,0 +1,17 @@
+# Add a basic worker pool to an existing HyperShift cluster
+apiVersion: legion.io/v1alpha1
+kind: LegionNodePool
+metadata:
+  name: my-hcp-cluster-extra-workers
+  namespace: cluster-provisioning
+spec:
+  compositionRef:
+    name: nodepool-aws
+  clusterName: my-hcp-cluster
+  poolName: extra-workers
+  replicas: 3
+  instanceType: m5.2xlarge
+  releaseImage: "4.17.0"
+  rootVolume:
+    size: 120
+    type: gp3

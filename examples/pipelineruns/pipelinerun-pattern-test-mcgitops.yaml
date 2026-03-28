@@ -1,0 +1,41 @@
+# Example: Provision a right-sized cluster for the multicloud-gitops pattern
+# using the pattern-test-provision pipeline.
+#
+# The pipeline reads pattern-metadata.yaml from the pattern repo,
+# extracts sizing for the chosen cloud/role, applies a Crossplane
+# LegionCluster claim, and validates the resulting cluster.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: pattern-test-mcgitops-
+  namespace: cluster-provisioning
+spec:
+  pipelineRef:
+    name: pattern-test-provision
+  taskRunTemplate:
+    serviceAccountName: legion-provisioner
+  workspaces:
+    - name: kubeconfig
+      emptyDir: {}
+  params:
+    - name: pattern-repo-url
+      value: https://github.com/validatedpatterns/multicloud-gitops.git
+    - name: pattern-repo-revision
+      value: main
+    - name: cloud-provider
+      value: aws
+    - name: cloud-region
+      value: us-east-2
+    - name: cluster-role
+      value: hub
+    - name: base-domain
+      value: qe.example.com
+    - name: name-prefix
+      value: qe
+    - name: cluster-version
+      value: img4.21.6-x86-64-appsub
+    # Leave empty to auto-detect from metadata (hcp if hypershift_support=true)
+    - name: cluster-type-override
+      value: "hive"
+    - name: timeout-minutes
+      value: "90"

@@ -1,0 +1,122 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: apply-legion-claim
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: >
+    Generates and applies a LegionCluster Crossplane claim from resolved
+    pattern-metadata parameters. Waits for the claim to become ready.
+  params:
+  - name: cluster-name
+    type: string
+  - name: cluster-type
+    description: "hive or hcp"
+    type: string
+    default: "hive"
+  - name: base-domain
+    type: string
+  - name: cloud-provider
+    type: string
+    default: "aws"
+  - name: cloud-region
+    type: string
+    default: "us-east-2"
+  - name: instance-type
+    type: string
+    default: "m5.xlarge"
+  - name: worker-replicas
+    type: string
+    default: "3"
+  - name: control-plane-machine-type
+    type: string
+    default: "m5.xlarge"
+  - name: control-plane-replicas
+    type: string
+    default: "3"
+  - name: cluster-version
+    type: string
+    default: "img4.21.6-x86-64-appsub"
+  - name: namespace
+    type: string
+    default: "cluster-provisioning"
+  - name: aws-account-id
+    description: "Required for HCP claims"
+    type: string
+    default: ""
+  - name: timeout-minutes
+    type: string
+    default: "60"
+  steps:
+  - name: apply-claim
+    image: {{ .Values.toolsImage }}
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+
+      CLUSTER_NAME="$(params.cluster-name)"
+      CLUSTER_TYPE="$(params.cluster-type)"
+      BASE_DOMAIN="$(params.base-domain)"
+      CLOUD="$(params.cloud-provider)"
+      REGION="$(params.cloud-region)"
+      INSTANCE="$(params.instance-type)"
+      WORKERS="$(params.worker-replicas)"
+      CP_TYPE="$(params.control-plane-machine-type)"
+      CP_REPLICAS="$(params.control-plane-replicas)"
+      VERSION="$(params.cluster-version)"
+      NS="$(params.namespace)"
+      AWS_ACCOUNT_ID="$(params.aws-account-id)"
+      TIMEOUT="$(params.timeout-minutes)"
+
+      COMPOSITION="${CLUSTER_TYPE}-${CLOUD}"
+
+      cat <<EOF > /tmp/claim.yaml
+      apiVersion: legion.io/v1alpha1
+      kind: LegionCluster
+      metadata:
+        name: ${CLUSTER_NAME}
+        namespace: ${NS}
+      spec:
+        compositionRef:
+          name: ${COMPOSITION}
+        clusterType: ${CLUSTER_TYPE}
+        clusterName: ${CLUSTER_NAME}
+        baseDomain: ${BASE_DOMAIN}
+        cloudRegion: ${REGION}
+        instanceType: ${INSTANCE}
+        workerReplicas: ${WORKERS}
+        credentials:
+          secretStoreName: vault-backend
+          awsCredsVaultKey: secret/data/hub/aws
+          pullSecretVaultKey: pushsecrets/global-pull-secret
+      EOF
+
+      if [ "${CLUSTER_TYPE}" = "hive" ]; then
+        cat <<EOF >> /tmp/claim.yaml
+        controlPlaneReplicas: ${CP_REPLICAS}
+        controlPlaneMachineType: ${CP_TYPE}
+        clusterVersion: ${VERSION}
+      EOF
+      fi
+
+      if [ "${CLUSTER_TYPE}" = "hcp" ]; then
+        cat <<EOF >> /tmp/claim.yaml
+        hypershift:
+          awsAccountId: "${AWS_ACCOUNT_ID}"
+          oidcBucketName: legion-hypershift-oidc
+          oidcBucketRegion: ${REGION}
+          endpointAccess: Public
+      EOF
+      fi
+
+      echo "Applying LegionCluster claim:"
+      cat /tmp/claim.yaml
+      echo "---"
+
+      oc apply -f /tmp/claim.yaml
+
+      echo "Claim applied. Cluster '${CLUSTER_NAME}' is provisioning via Crossplane."
+      echo "Composition: ${COMPOSITION}"
+      echo "Timeout for downstream wait: ${TIMEOUT}m"

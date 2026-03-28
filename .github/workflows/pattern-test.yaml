@@ -1,0 +1,322 @@
+# Reusable workflow: Provision a right-sized cluster from pattern-metadata.yaml
+# and run validation. Called from individual pattern repos.
+#
+# Usage in a pattern repo's .github/workflows/ci.yaml:
+#
+#   jobs:
+#     provision-and-test:
+#       uses: day0hero/legion/.github/workflows/pattern-test.yaml@main
+#       with:
+#         cloud: aws
+#         region: us-east-2
+#         base-domain: ci.example.com
+#         cluster-type: hive
+#       secrets:
+#         KUBECONFIG: ${{ secrets.LEGION_HUB_KUBECONFIG }}
+#         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+#
+name: Pattern Test - Provision & Validate
+
+on:
+  workflow_call:
+    inputs:
+      cloud:
+        description: "Cloud provider (aws, gcp, azure)"
+        type: string
+        default: "aws"
+      region:
+        description: "Cloud region"
+        type: string
+        default: "us-east-2"
+      base-domain:
+        description: "Base DNS domain for provisioned clusters"
+        type: string
+        required: true
+      cluster-type:
+        description: "Cluster type override (hive or hcp). Empty = auto-detect"
+        type: string
+        default: ""
+      cluster-version:
+        description: "OCP version / ClusterImageSet"
+        type: string
+        default: "img4.21.6-x86-64-appsub"
+      name-prefix:
+        description: "Prefix for cluster names"
+        type: string
+        default: "ci"
+      roles:
+        description: "Space-separated list of cluster roles to provision (hub spoke)"
+        type: string
+        default: "hub"
+      provision-method:
+        description: "crossplane or pipelinerun"
+        type: string
+        default: "crossplane"
+      timeout-minutes:
+        description: "Cluster provisioning timeout"
+        type: number
+        default: 90
+      destroy-on-success:
+        description: "Tear down clusters after successful validation"
+        type: boolean
+        default: true
+    secrets:
+      KUBECONFIG:
+        description: "Kubeconfig for the Legion hub cluster"
+        required: true
+      AWS_ACCOUNT_ID:
+        description: "AWS account ID (required for HCP)"
+        required: false
+
+jobs:
+  resolve-metadata:
+    name: Extract cluster sizing from pattern-metadata.yaml
+    runs-on: ubuntu-latest
+    outputs:
+      pattern-name: ${{ steps.meta.outputs.pattern_name }}
+      claims-yaml: ${{ steps.generate.outputs.claims_file }}
+      cluster-names: ${{ steps.generate.outputs.cluster_names }}
+    steps:
+      - name: Checkout pattern repo
+        uses: actions/checkout@v4
+
+      - name: Verify pattern-metadata.yaml exists
+        run: |
+          if [ ! -f pattern-metadata.yaml ]; then
+            echo "::error::pattern-metadata.yaml not found in repository root"
+            exit 1
+          fi
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          echo "pattern_name=$(yq '.name' pattern-metadata.yaml)" >> "$GITHUB_OUTPUT"
+          echo "hypershift_support=$(yq '.extra_features.hypershift_support // false' pattern-metadata.yaml)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout legion repo (for generate-claims.py)
+        uses: actions/checkout@v4
+        with:
+          repository: day0hero/legion
+          path: _legion
+          sparse-checkout: scripts
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r _legion/scripts/requirements.txt
+
+      - name: Determine cluster type
+        id: resolve-type
+        run: |
+          REQUESTED="${{ inputs.cluster-type }}"
+          if [ -z "${REQUESTED}" ]; then
+            HYPERSHIFT="${{ steps.meta.outputs.hypershift_support }}"
+            if [ "${HYPERSHIFT}" = "true" ]; then
+              echo "type=hcp" >> "$GITHUB_OUTPUT"
+            else
+              echo "type=hive" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "type=${REQUESTED}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate cluster claims
+        id: generate
+        run: |
+          EXTRA_ARGS=""
+          if [ "${{ steps.resolve-type.outputs.type }}" = "hcp" ]; then
+            EXTRA_ARGS="--aws-account-id ${{ secrets.AWS_ACCOUNT_ID }}"
+          fi
+
+          python _legion/scripts/generate-claims.py \
+            pattern-metadata.yaml \
+            --cloud "${{ inputs.cloud }}" \
+            --cluster-type "${{ steps.resolve-type.outputs.type }}" \
+            --base-domain "${{ inputs.base-domain }}" \
+            --region "${{ inputs.region }}" \
+            --name-prefix "${{ inputs.name-prefix }}-${{ github.run_number }}" \
+            --output-format "${{ inputs.provision-method }}" \
+            --roles ${{ inputs.roles }} \
+            ${EXTRA_ARGS} \
+            > claims.yaml
+
+          echo "claims_file=claims.yaml" >> "$GITHUB_OUTPUT"
+          echo "Generated claims:"
+          cat claims.yaml
+
+          # Extract cluster names for the matrix / cleanup
+          NAMES=$(grep 'clusterName:' claims.yaml | awk '{print $2}' | tr '\n' ' ')
+          echo "cluster_names=${NAMES}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload claims artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cluster-claims
+          path: claims.yaml
+
+  provision:
+    name: Provision cluster(s)
+    needs: resolve-metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download claims
+        uses: actions/download-artifact@v4
+        with:
+          name: cluster-claims
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+
+      - name: Install oc CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: "latest"
+
+      - name: Apply claims
+        run: |
+          echo "Applying cluster claims..."
+          oc apply -f claims.yaml
+          echo "Claims applied. Clusters are provisioning."
+
+      - name: Wait for clusters
+        timeout-minutes: ${{ inputs.timeout-minutes }}
+        run: |
+          for CLUSTER_NAME in ${{ needs.resolve-metadata.outputs.cluster-names }}; do
+            echo "Waiting for ${CLUSTER_NAME} to be ready..."
+
+            # Poll the LegionCluster status
+            READY=false
+            ELAPSED=0
+            INTERVAL=60
+            TIMEOUT_SECS=$(( ${{ inputs.timeout-minutes }} * 60 ))
+
+            while [ "${ELAPSED}" -lt "${TIMEOUT_SECS}" ]; do
+              STATUS=$(oc get legionclusters.legion.io "${CLUSTER_NAME}" \
+                -n cluster-provisioning \
+                -o jsonpath='{.status.clusterStatus}' 2>/dev/null || echo "unknown")
+
+              echo "  [${ELAPSED}s] ${CLUSTER_NAME}: ${STATUS}"
+
+              if [ "${STATUS}" = "Ready" ] || [ "${STATUS}" = "ready" ]; then
+                READY=true
+                break
+              fi
+
+              sleep "${INTERVAL}"
+              ELAPSED=$((ELAPSED + INTERVAL))
+            done
+
+            if [ "${READY}" != "true" ]; then
+              echo "::error::Cluster ${CLUSTER_NAME} did not become ready within ${{ inputs.timeout-minutes }} minutes"
+              exit 1
+            fi
+
+            echo "Cluster ${CLUSTER_NAME} is ready."
+          done
+
+  validate:
+    name: Validate cluster(s)
+    needs: [resolve-metadata, provision]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+
+      - name: Install oc CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: "latest"
+
+      - name: Run validation
+        run: |
+          OVERALL_RESULT=0
+          for CLUSTER_NAME in ${{ needs.resolve-metadata.outputs.cluster-names }}; do
+            echo "============================================"
+            echo "Validating ${CLUSTER_NAME}..."
+            echo "============================================"
+
+            # Extract the provisioned cluster's kubeconfig
+            KUBECONFIG_SECRET=$(oc get secret -n "${CLUSTER_NAME}" \
+              -l hive.openshift.io/cluster-deployment-name="${CLUSTER_NAME}" \
+              -l hive.openshift.io/secret-type=kubeconfig \
+              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+
+            if [ -z "${KUBECONFIG_SECRET}" ]; then
+              # Try HCP kubeconfig location
+              KUBECONFIG_SECRET="${CLUSTER_NAME}-admin-kubeconfig"
+              NS="clusters"
+            else
+              NS="${CLUSTER_NAME}"
+            fi
+
+            oc get secret "${KUBECONFIG_SECRET}" -n "${NS}" \
+              -o jsonpath='{.data.kubeconfig}' 2>/dev/null | base64 -d > /tmp/spoke-kubeconfig
+
+            if [ ! -s /tmp/spoke-kubeconfig ]; then
+              echo "::warning::Could not extract kubeconfig for ${CLUSTER_NAME}, skipping validation"
+              continue
+            fi
+
+            export KUBECONFIG=/tmp/spoke-kubeconfig
+
+            # Basic health checks
+            if oc cluster-info &>/dev/null; then
+              echo "  [PASS] API server reachable"
+            else
+              echo "  [FAIL] API server unreachable"
+              OVERALL_RESULT=1
+            fi
+
+            if oc get --raw /healthz 2>/dev/null | grep -q "ok"; then
+              echo "  [PASS] /healthz returns ok"
+            else
+              echo "  [FAIL] /healthz check failed"
+              OVERALL_RESULT=1
+            fi
+
+            DEGRADED=$(oc get clusteroperators -o json 2>/dev/null | \
+              jq -r '.items[] | select(.status.conditions[] | select(.type=="Degraded" and .status=="True")) | .metadata.name' || echo "")
+            if [ -z "${DEGRADED}" ]; then
+              echo "  [PASS] No ClusterOperators degraded"
+            else
+              echo "  [FAIL] Degraded ClusterOperators: ${DEGRADED}"
+              OVERALL_RESULT=1
+            fi
+
+            unset KUBECONFIG
+            echo ""
+          done
+
+          exit ${OVERALL_RESULT}
+
+  cleanup:
+    name: Destroy clusters
+    needs: [resolve-metadata, validate]
+    if: always() && inputs.destroy-on-success
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+
+      - name: Install oc CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: "latest"
+
+      - name: Delete claims
+        run: |
+          for CLUSTER_NAME in ${{ needs.resolve-metadata.outputs.cluster-names }}; do
+            echo "Deleting LegionCluster claim: ${CLUSTER_NAME}"
+            oc delete legionclusters.legion.io "${CLUSTER_NAME}" \
+              -n cluster-provisioning --ignore-not-found=true
+          done
+          echo "Cleanup complete. Crossplane will handle resource teardown."

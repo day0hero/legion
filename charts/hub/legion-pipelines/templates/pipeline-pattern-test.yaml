@@ -1,0 +1,156 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: pattern-test-provision
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: >
+    End-to-end pipeline for QE pattern testing. Reads a pattern's
+    pattern-metadata.yaml, provisions right-sized cluster(s) via
+    Crossplane claims, and runs validation.
+  params:
+    - name: pattern-repo-url
+      description: "Git URL of the pattern to test"
+      type: string
+    - name: pattern-repo-revision
+      type: string
+      default: "main"
+    - name: cloud-provider
+      type: string
+      default: "aws"
+    - name: cloud-region
+      type: string
+      default: "us-east-2"
+    - name: cluster-role
+      description: "Which cluster role to provision (hub or spoke)"
+      type: string
+      default: "hub"
+    - name: cluster-type-override
+      description: "Force hive or hcp (empty = auto-detect from metadata)"
+      type: string
+      default: ""
+    - name: base-domain
+      type: string
+    - name: name-prefix
+      type: string
+      default: "qe"
+    - name: cluster-version
+      type: string
+      default: "img4.21.6-x86-64-appsub"
+    - name: aws-account-id
+      description: "AWS account ID (required for HCP)"
+      type: string
+      default: ""
+    - name: timeout-minutes
+      type: string
+      default: "90"
+  workspaces:
+    - name: kubeconfig
+  tasks:
+    # Step 1: Read pattern-metadata.yaml and extract sizing
+    - name: resolve-metadata
+      taskRef:
+        name: resolve-pattern-metadata
+      params:
+        - name: pattern-repo-url
+          value: $(params.pattern-repo-url)
+        - name: pattern-repo-revision
+          value: $(params.pattern-repo-revision)
+        - name: cloud-provider
+          value: $(params.cloud-provider)
+        - name: cluster-role
+          value: $(params.cluster-role)
+        - name: cluster-type-override
+          value: $(params.cluster-type-override)
+        - name: name-prefix
+          value: $(params.name-prefix)
+
+    # Step 2: Apply the Crossplane LegionCluster claim
+    - name: apply-claim
+      runAfter:
+        - resolve-metadata
+      taskRef:
+        name: apply-legion-claim
+      params:
+        - name: cluster-name
+          value: $(tasks.resolve-metadata.results.cluster-name)
+        - name: cluster-type
+          value: $(tasks.resolve-metadata.results.cluster-type)
+        - name: base-domain
+          value: $(params.base-domain)
+        - name: cloud-provider
+          value: $(params.cloud-provider)
+        - name: cloud-region
+          value: $(params.cloud-region)
+        - name: instance-type
+          value: $(tasks.resolve-metadata.results.instance-type)
+        - name: worker-replicas
+          value: $(tasks.resolve-metadata.results.worker-replicas)
+        - name: control-plane-machine-type
+          value: $(tasks.resolve-metadata.results.control-plane-machine-type)
+        - name: control-plane-replicas
+          value: $(tasks.resolve-metadata.results.control-plane-replicas)
+        - name: cluster-version
+          value: $(params.cluster-version)
+        - name: aws-account-id
+          value: $(params.aws-account-id)
+        - name: timeout-minutes
+          value: $(params.timeout-minutes)
+
+    # Step 3: Wait for cluster to be ready (Hive path)
+    - name: wait-cluster-ready
+      runAfter:
+        - apply-claim
+      when:
+        - input: $(tasks.resolve-metadata.results.cluster-type)
+          operator: in
+          values: ["hive"]
+      taskRef:
+        name: hive-wait-cluster-ready
+      workspaces:
+        - name: kubeconfig
+          workspace: kubeconfig
+      params:
+        - name: cluster-name
+          value: $(tasks.resolve-metadata.results.cluster-name)
+        - name: timeout-minutes
+          value: $(params.timeout-minutes)
+
+    # Step 3 (alt): Wait for HCP cluster ready
+    - name: wait-hcp-ready
+      runAfter:
+        - apply-claim
+      when:
+        - input: $(tasks.resolve-metadata.results.cluster-type)
+          operator: in
+          values: ["hcp"]
+      taskRef:
+        name: hypershift-wait-ready
+      workspaces:
+        - name: kubeconfig
+          workspace: kubeconfig
+      params:
+        - name: cluster-name
+          value: $(tasks.resolve-metadata.results.cluster-name)
+        - name: timeout-minutes
+          value: $(params.timeout-minutes)
+
+    # Step 4: Validate the cluster
+    - name: validate
+      runAfter:
+        - wait-cluster-ready
+        - wait-hcp-ready
+      taskRef:
+        name: validate-cluster
+      workspaces:
+        - name: kubeconfig
+          workspace: kubeconfig
+      params:
+        - name: cluster-name
+          value: $(tasks.resolve-metadata.results.cluster-name)
+        - name: cluster-type
+          value: $(tasks.resolve-metadata.results.cluster-type)
+        - name: run-smoke-test
+          value: "true"

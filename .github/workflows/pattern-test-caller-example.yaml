@@ -1,0 +1,47 @@
+# EXAMPLE: Copy this file into a pattern repo as .github/workflows/ci.yaml
+# and adjust the inputs/secrets for your environment.
+#
+# This calls the reusable workflow in the Legion repo to:
+#   1. Read your pattern-metadata.yaml
+#   2. Provision a right-sized cluster via Legion/Crossplane
+#   3. Validate the cluster
+#   4. Tear it down on success
+#
+name: Pattern CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      cloud:
+        description: "Cloud provider"
+        type: choice
+        options: [aws, gcp, azure]
+        default: aws
+      cluster-type:
+        description: "Cluster type (empty = auto-detect)"
+        type: choice
+        options: ["", hive, hcp]
+        default: ""
+      region:
+        description: "Cloud region"
+        type: string
+        default: "us-east-2"
+
+jobs:
+  pattern-test:
+    uses: day0hero/legion/.github/workflows/pattern-test.yaml@main
+    with:
+      cloud: ${{ github.event.inputs.cloud || 'aws' }}
+      region: ${{ github.event.inputs.region || 'us-east-2' }}
+      base-domain: ci.example.com
+      cluster-type: ${{ github.event.inputs.cluster-type || '' }}
+      name-prefix: ci
+      roles: "hub"
+      destroy-on-success: true
+    secrets:
+      KUBECONFIG: ${{ secrets.LEGION_HUB_KUBECONFIG }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}

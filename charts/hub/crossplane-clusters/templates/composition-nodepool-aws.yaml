@@ -1,0 +1,165 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: nodepool-aws
+  labels:
+    legion.io/resource-type: nodepool
+    legion.io/cloud-provider: aws
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  compositeTypeRef:
+    apiVersion: legion.io/v1alpha1
+    kind: XLegionNodePool
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # ──────────────────────────────────────────────────
+          # HyperShift NodePool
+          # ──────────────────────────────────────────────────
+          - name: node-pool
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                forProvider:
+                  manifest:
+                    apiVersion: hypershift.openshift.io/v1beta1
+                    kind: NodePool
+                    metadata:
+                      name: ""
+                      namespace: clusters
+                    spec:
+                      clusterName: ""
+                      replicas: 2
+                      management:
+                        autoRepair: true
+                        upgradeType: Replace
+                      platform:
+                        type: AWS
+                        aws:
+                          instanceType: m5.xlarge
+                          rootVolume:
+                            size: 120
+                            type: gp3
+                            iops: 3000
+                          subnet:
+                            filters:
+                              - name: "tag:kubernetes.io/role/internal-elb"
+                                values:
+                                  - "1"
+                      release:
+                        image: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              # ── Identity ──
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: spec.poolName
+                  strategy: string
+                  string:
+                    fmt: "%s-%s"
+                toFieldPath: spec.forProvider.manifest.metadata.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.clusterName
+                toFieldPath: spec.forProvider.manifest.spec.clusterName
+
+              # ── Sizing ──
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.replicas
+                toFieldPath: spec.forProvider.manifest.spec.replicas
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.instanceType
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.instanceType
+
+              # ── Root volume ──
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.rootVolume.size
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.rootVolume.size
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.rootVolume.type
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.rootVolume.type
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.rootVolume.iops
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.rootVolume.iops
+                policy:
+                  fromFieldPath: Optional
+
+              # ── Release image ──
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.releaseImage
+                  strategy: string
+                  string:
+                    fmt: "quay.io/openshift-release-dev/ocp-release:%s-x86_64"
+                toFieldPath: spec.forProvider.manifest.spec.release.image
+
+              # ── Management ──
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.management.autoRepair
+                toFieldPath: spec.forProvider.manifest.spec.management.autoRepair
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.management.upgradeType
+                toFieldPath: spec.forProvider.manifest.spec.management.upgradeType
+                policy:
+                  fromFieldPath: Optional
+
+              # ── Subnet filter ──
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.subnetFilter.tagKey
+                  strategy: string
+                  string:
+                    fmt: "tag:%s"
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.subnet.filters[0].name
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.subnetFilter.tagValue
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.subnet.filters[0].values[0]
+                policy:
+                  fromFieldPath: Optional
+
+              # ── Autoscaling (optional) ──
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.autoScaling.min
+                toFieldPath: spec.forProvider.manifest.spec.autoScaling.min
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.autoScaling.max
+                toFieldPath: spec.forProvider.manifest.spec.autoScaling.max
+                policy:
+                  fromFieldPath: Optional
+
+              # ── Node labels (optional) ──
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.labels
+                toFieldPath: spec.forProvider.manifest.spec.nodeLabels
+                policy:
+                  fromFieldPath: Optional
+
+              # ── Taints (optional) ──
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.taints
+                toFieldPath: spec.forProvider.manifest.spec.taints
+                policy:
+                  fromFieldPath: Optional

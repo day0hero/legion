@@ -1,0 +1,128 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: resolve-pattern-metadata
+  namespace: {{ .Values.pipelineNamespace }}
+  labels:
+    {{- include "legion-pipelines.labels" . | nindent 4 }}
+spec:
+  description: >
+    Fetches a pattern's pattern-metadata.yaml from a Git repo and extracts
+    cluster sizing parameters for a given cloud provider and cluster role.
+    Outputs are consumed by downstream provisioning tasks/pipelines.
+  params:
+  - name: pattern-repo-url
+    description: "Git URL of the pattern repository"
+    type: string
+  - name: pattern-repo-revision
+    description: "Git branch, tag, or SHA to checkout"
+    type: string
+    default: "main"
+  - name: cloud-provider
+    description: "Cloud provider key matching pattern-metadata.yaml (aws, gcp, azure)"
+    type: string
+    default: "aws"
+  - name: cluster-role
+    description: "Cluster role to extract from requirements (hub or spoke)"
+    type: string
+    default: "hub"
+  - name: cluster-type-override
+    description: "Force cluster type (hive or hcp). Empty = auto-detect from metadata"
+    type: string
+    default: ""
+  - name: name-prefix
+    description: "Prefix for generated cluster name"
+    type: string
+    default: "qe"
+  results:
+  - name: pattern-name
+    description: "Name of the pattern from metadata"
+  - name: cluster-name
+    description: "Generated cluster name"
+  - name: cluster-type
+    description: "Resolved cluster type (hive or hcp)"
+  - name: instance-type
+    description: "EC2/VM instance type for compute nodes"
+  - name: worker-replicas
+    description: "Number of compute/worker replicas"
+  - name: control-plane-machine-type
+    description: "Instance type for control plane nodes"
+  - name: control-plane-replicas
+    description: "Number of control plane replicas"
+  - name: hypershift-support
+    description: "'true' if the pattern declares HyperShift support"
+  - name: spoke-support
+    description: "'true' if the pattern declares spoke cluster support"
+  steps:
+  - name: fetch-and-extract
+    image: alpine/git:2.43.0
+    script: |
+      #!/bin/sh
+      set -eu
+
+      apk add --no-cache yq >/dev/null 2>&1 || true
+
+      REPO="$(params.pattern-repo-url)"
+      REV="$(params.pattern-repo-revision)"
+      CLOUD="$(params.cloud-provider)"
+      ROLE="$(params.cluster-role)"
+      TYPE_OVERRIDE="$(params.cluster-type-override)"
+      PREFIX="$(params.name-prefix)"
+
+      echo "Cloning ${REPO} @ ${REV}..."
+      git clone --depth 1 --branch "${REV}" "${REPO}" /tmp/pattern 2>&1
+
+      META="/tmp/pattern/pattern-metadata.yaml"
+      if [ ! -f "${META}" ]; then
+        echo "ERROR: pattern-metadata.yaml not found in repository root"
+        exit 1
+      fi
+
+      echo "Parsing pattern-metadata.yaml..."
+      PATTERN_NAME=$(yq '.name' "${META}")
+      HYPERSHIFT_SUPPORT=$(yq '.extra_features.hypershift_support // false' "${META}")
+      SPOKE_SUPPORT=$(yq '.extra_features.spoke_support // false' "${META}")
+
+      INSTANCE=$(yq ".requirements.${ROLE}.compute.platform.${CLOUD}.type" "${META}")
+      WORKERS=$(yq ".requirements.${ROLE}.compute.platform.${CLOUD}.replicas" "${META}")
+      CP_TYPE=$(yq ".requirements.${ROLE}.controlPlane.platform.${CLOUD}.type" "${META}")
+      CP_REPLICAS=$(yq ".requirements.${ROLE}.controlPlane.platform.${CLOUD}.replicas" "${META}")
+
+      if [ "${INSTANCE}" = "null" ] || [ -z "${INSTANCE}" ]; then
+        echo "ERROR: No compute sizing found for role=${ROLE} cloud=${CLOUD}"
+        exit 1
+      fi
+
+      if [ -n "${TYPE_OVERRIDE}" ]; then
+        CLUSTER_TYPE="${TYPE_OVERRIDE}"
+      elif [ "${HYPERSHIFT_SUPPORT}" = "true" ]; then
+        CLUSTER_TYPE="hcp"
+      else
+        CLUSTER_TYPE="hive"
+      fi
+
+      CLUSTER_NAME="${PREFIX}-${PATTERN_NAME}-${ROLE}"
+
+      echo "============================================"
+      echo "Pattern:         ${PATTERN_NAME}"
+      echo "Role:            ${ROLE}"
+      echo "Cloud:           ${CLOUD}"
+      echo "Cluster type:    ${CLUSTER_TYPE}"
+      echo "Cluster name:    ${CLUSTER_NAME}"
+      echo "Instance type:   ${INSTANCE}"
+      echo "Workers:         ${WORKERS}"
+      echo "CP type:         ${CP_TYPE}"
+      echo "CP replicas:     ${CP_REPLICAS}"
+      echo "HyperShift:      ${HYPERSHIFT_SUPPORT}"
+      echo "Spoke support:   ${SPOKE_SUPPORT}"
+      echo "============================================"
+
+      printf "%s" "${PATTERN_NAME}"        > "$(results.pattern-name.path)"
+      printf "%s" "${CLUSTER_NAME}"        > "$(results.cluster-name.path)"
+      printf "%s" "${CLUSTER_TYPE}"        > "$(results.cluster-type.path)"
+      printf "%s" "${INSTANCE}"            > "$(results.instance-type.path)"
+      printf "%s" "${WORKERS}"             > "$(results.worker-replicas.path)"
+      printf "%s" "${CP_TYPE}"             > "$(results.control-plane-machine-type.path)"
+      printf "%s" "${CP_REPLICAS}"         > "$(results.control-plane-replicas.path)"
+      printf "%s" "${HYPERSHIFT_SUPPORT}"  > "$(results.hypershift-support.path)"
+      printf "%s" "${SPOKE_SUPPORT}"       > "$(results.spoke-support.path)"

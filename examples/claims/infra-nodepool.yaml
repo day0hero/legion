@@ -1,0 +1,30 @@
+# Dedicated infra NodePool with taints to keep user workloads off
+apiVersion: legion.io/v1alpha1
+kind: LegionNodePool
+metadata:
+  name: my-hcp-cluster-infra
+  namespace: cluster-provisioning
+spec:
+  compositionRef:
+    name: nodepool-aws
+  clusterName: my-hcp-cluster
+  poolName: infra
+  replicas: 3
+  instanceType: m5.4xlarge
+  releaseImage: "4.17.0"
+  rootVolume:
+    size: 200
+    type: gp3
+    iops: 6000
+  labels:
+    node-role.kubernetes.io/infra: ""
+  taints:
+    - key: node-role.kubernetes.io/infra
+      value: reserved
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/infra
+      value: reserved
+      effect: NoExecute
+  management:
+    autoRepair: true
+    upgradeType: Replace
