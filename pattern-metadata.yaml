@@ -1,0 +1,45 @@
+# This goal of this metadata is mainly used as a source of truth for
+# documentation and qe
+metadata_version: "1.0"
+name: legion
+description: Cluster-as-a-Service platform using Crossplane, Hive, and HyperShift to provision OpenShift clusters on demand
+pattern_version: "1.0"
+display_name: Legion CaaS
+repo_url: https://github.com/day0hero/legion
+docs_repo_url: https://github.com/day0hero/legion
+issues_url: https://github.com/day0hero/legion/issues
+tier: sandbox
+owners: jrickard
+requirements:
+  hub:
+    compute:
+      platform:
+        gcp:
+          replicas: 3
+          type: n1-standard-8
+        azure:
+          replicas: 3
+          type: Standard_D8s_v3
+        aws:
+          replicas: 3
+          type: m5.8xlarge
+    controlPlane:
+      platform:
+        gcp:
+          replicas: 3
+          type: n1-standard-4
+        azure:
+          replicas: 3
+          type: Standard_D4s_v3
+        aws:
+          replicas: 3
+          type: m5.xlarge
+
+extra_features:
+  hypershift_support: true
+  spoke_support: false
+
+external_requirements:
+# AWS credentials for Crossplane providers
+# Vault instance for secrets management
+# S3 bucket for HyperShift OIDC (auto-created by the pattern)
