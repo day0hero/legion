@@ -168,8 +168,18 @@ spec:
                   variables:
                     - fromFieldPath: spec.baseDomain
                     - fromFieldPath: spec.instanceType
+                    - fromFieldPath: spec.rootVolumeSize
                     - fromFieldPath: spec.rootVolumeType
+                    - fromFieldPath: spec.workerReplicas
+                    - fromFieldPath: spec.controlPlaneMachineType
+                    - fromFieldPath: spec.rootVolumeSize
+                    - fromFieldPath: spec.rootVolumeType
+                    - fromFieldPath: spec.controlPlaneReplicas
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: spec.networking.podCidr
+                    - fromFieldPath: spec.networking.hostPrefix
+                    - fromFieldPath: spec.networking.machineCidr
+                    - fromFieldPath: spec.networking.serviceCidr
                     - fromFieldPath: spec.cloudRegion
                   strategy: string
                   string:
@@ -184,31 +194,31 @@ spec:
                           aws:
                             type: %s
                             rootVolume:
-                              size: 200
+                              size: %s
                               type: %s
-                        replicas: 3
+                        replicas: %s
                       controlPlane:
                         architecture: amd64
                         hyperthreading: Enabled
                         name: master
                         platform:
                           aws:
-                            type: m5.xlarge
+                            type: %s
                             rootVolume:
-                              size: 200
-                              type: gp3
-                        replicas: 3
+                              size: %s
+                              type: %s
+                        replicas: %s
                       metadata:
                         name: %s
                       networking:
                         clusterNetwork:
-                        - cidr: 10.128.0.0/14
-                          hostPrefix: 23
+                        - cidr: %s
+                          hostPrefix: %s
                         machineNetwork:
-                        - cidr: 10.0.0.0/16
+                        - cidr: %s
                         networkType: OVNKubernetes
                         serviceNetwork:
-                        - 172.30.0.0/16
+                        - %s
                       platform:
                         aws:
                           region: %s
@@ -306,7 +316,7 @@ spec:
                         aws:
                           rootVolume:
                             iops: 100
-                            size: 200
+                            size: 120
                             type: gp3
                           type: m5.xlarge
                       replicas: 3
@@ -333,6 +343,9 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.workerReplicas
                 toFieldPath: spec.forProvider.manifest.spec.replicas
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.rootVolumeSize
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.rootVolume.size
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.rootVolumeType
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.rootVolume.type
