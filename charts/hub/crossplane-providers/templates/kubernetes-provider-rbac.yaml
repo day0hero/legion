@@ -20,7 +20,7 @@ rules:
   - apiGroups: ["cluster.open-cluster-management.io"]
     resources: ["managedclustersets/join", "managedclustersets/bind"]
     verbs: ["create"]
-  - apiGroups: ["cluster.open-cluster-management.io"]
+  - apiGroups: ["register.open-cluster-management.io"]
     resources: ["managedclusters/accept"]
     verbs: ["update"]
   - apiGroups: ["agent.open-cluster-management.io"]
