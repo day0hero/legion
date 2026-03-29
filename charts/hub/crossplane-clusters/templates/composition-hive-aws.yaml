@@ -194,9 +194,9 @@ spec:
                           aws:
                             type: %s
                             rootVolume:
-                              size: %s
+                              size: %v
                               type: %s
-                        replicas: %s
+                        replicas: %v
                       controlPlane:
                         architecture: amd64
                         hyperthreading: Enabled
@@ -205,15 +205,15 @@ spec:
                           aws:
                             type: %s
                             rootVolume:
-                              size: %s
+                              size: %v
                               type: %s
-                        replicas: %s
+                        replicas: %v
                       metadata:
                         name: %s
                       networking:
                         clusterNetwork:
                         - cidr: %s
-                          hostPrefix: %s
+                          hostPrefix: %v
                         machineNetwork:
                         - cidr: %s
                         networkType: OVNKubernetes
