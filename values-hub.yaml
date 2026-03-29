@@ -14,10 +14,6 @@ clusterGroup:
     - legion-monitoring
     - crossplane-system
     - clusters
-#    - ack-system
-
-  operatorgroupExcludes:
-    - ack-system
 
   subscriptions:
     acm:
@@ -35,17 +31,10 @@ clusterGroup:
       source: redhat-operators
       channel: stable-v1
 
-#    ack-s3:
-#      name: ack-s3-controller
-#      namespace: ack-system
-#      channel: alpha
-#      source: community-operators
-
   argoProjects:
     - hub
     - infrastructure
     - crossplane
-#    - s3
 
   applications:
     acm:
@@ -122,19 +111,6 @@ clusterGroup:
       namespace: crossplane-system
       argoProject: crossplane
       path: charts/hub/crossplane-clusters
-
-#    ack-s3:
-#      name: ack-s3
-#      namespace: ack-system
-#      argoProject: s3
-#      path: charts/hub/ack-s3
-#      overrides:
-#      - name: oidc.region
-#        value: us-east-2
-#      - name: oidc.bucketName
-#        value: vp-hypershift-state
-#      - name: s3.createBucket
-#        value: false
 
   imperative:
     namespace: imperative
