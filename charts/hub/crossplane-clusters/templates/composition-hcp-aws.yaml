@@ -1790,9 +1790,17 @@ spec:
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
+              metadata:
+                name: ""
               spec:
                 # Ensure the HostedCluster is removed when the composite/claim is deleted.
                 deletionPolicy: Delete
+                # NodePool must not reconcile until the control plane has published kubeconfig,
+                # ignition material, and AWS defaults (SG, etc.); otherwise the nodepool-controller
+                # races with HostedCluster provisioning (KubeConfig / ignition-server-ca-cert / default SG).
+                readiness:
+                  policy: DeriveFromCelQuery
+                  celQuery: 'has(object.status.kubeconfig) && object.status.kubeconfig.name != ""'
                 forProvider:
                   manifest:
                     apiVersion: hypershift.openshift.io/v1beta1
@@ -1868,6 +1876,15 @@ spec:
                 providerConfigRef:
                   name: default
             patches:
+              # Stable Object name so the NodePool Object can dependsOn this Managed Resource.
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: metadata.name
+                  strategy: string
+                  string:
+                    fmt: "%s-hosted-cluster"
+                toFieldPath: metadata.name
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.clusterName
                 toFieldPath: spec.forProvider.manifest.metadata.name
@@ -1999,8 +2016,15 @@ spec:
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
+              metadata:
+                name: ""
               spec:
                 deletionPolicy: Delete
+                references:
+                  - dependsOn:
+                      apiVersion: kubernetes.crossplane.io/v1alpha2
+                      kind: Object
+                      name: ""
                 forProvider:
                   manifest:
                     apiVersion: hypershift.openshift.io/v1beta1
@@ -2037,6 +2061,22 @@ spec:
                 providerConfigRef:
                   name: default
             patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: metadata.name
+                  strategy: string
+                  string:
+                    fmt: "%s-node-pool"
+                toFieldPath: metadata.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: metadata.name
+                  strategy: string
+                  string:
+                    fmt: "%s-hosted-cluster"
+                toFieldPath: spec.references[0].dependsOn.name
               - type: FromCompositeFieldPath
                 fromFieldPath: status.vpcId
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.subnet.filters[0].values[0]
