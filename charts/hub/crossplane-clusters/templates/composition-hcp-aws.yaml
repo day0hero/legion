@@ -1132,6 +1132,8 @@ spec:
 
           # ──────────────────────────────────────────────────
           # OIDC provider (HyperShift S3 issuer)
+          # Must match hypershift create iam aws: issuer is https://<bucket>.s3.<region>.amazonaws.com/<infraID>
+          # where infraID is the same string as HostedCluster.spec.infraID (clusterName + composite uid).
           # ──────────────────────────────────────────────────
           - name: oidc-provider
             base:
@@ -1143,11 +1145,9 @@ spec:
                   clientIdList:
                     - "openshift"
                     - "sts.amazonaws.com"
-                  # *.s3.<region>.amazonaws.com chain (must match oidcBucketRegion or STS/IRSA fails).
+                  # S3-hosted OIDC: DigiCert root thumbprint (see openshift/hypershift cmd/infra/aws/iam.go).
                   thumbprintList:
-                    - "06b25927c42a721631c1efd9431e648fa62e1e39"
-                    - "2ad974a775f73cbbdbbd8f5ac3a49255fa8fb1f8c"
-                    - "ae850e360c414bfa50fea2664a0791cd2e5e4b96"
+                    - "A9D53002E97E00E043244F3D170D6F4C414104FD"
                 providerConfigRef:
                   name: default
             patches:
@@ -1157,9 +1157,10 @@ spec:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "https://%s.s3.%s.amazonaws.com/%s"
+                    fmt: "https://%s.s3.%s.amazonaws.com/%s-%s"
                 toFieldPath: spec.forProvider.url
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.arn
@@ -1185,10 +1186,12 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-control-plane-operator"
+                    fmt: "%s-%s-control-plane-operator"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
+              # Trust policy matches hypershift oidcTrustPolicy (kube-system:control-plane-operator).
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1196,9 +1199,14 @@ spec:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s-%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"%s.s3.%s.amazonaws.com/%s-%s:sub":"system:serviceaccount:kube-system:control-plane-operator"}}}]}'
                 toFieldPath: spec.forProvider.assumeRolePolicy
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.arn
@@ -1221,9 +1229,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-image-registry"
+                    fmt: "%s-%s-openshift-image-registry"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1232,9 +1241,14 @@ spec:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s-%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"ForAnyValue:StringEquals":{"%s.s3.%s.amazonaws.com/%s-%s:sub":["system:serviceaccount:openshift-image-registry:cluster-image-registry-operator","system:serviceaccount:openshift-image-registry:registry"]}}}]}'
                 toFieldPath: spec.forProvider.assumeRolePolicy
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.arn
@@ -1257,9 +1271,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-ingress"
+                    fmt: "%s-%s-openshift-ingress"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1268,9 +1283,14 @@ spec:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s-%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"%s.s3.%s.amazonaws.com/%s-%s:sub":"system:serviceaccount:openshift-ingress-operator:ingress-operator"}}}]}'
                 toFieldPath: spec.forProvider.assumeRolePolicy
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.arn
@@ -1293,9 +1313,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-kube-cloud-controller"
+                    fmt: "%s-%s-cloud-controller"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1304,9 +1325,14 @@ spec:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s-%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"%s.s3.%s.amazonaws.com/%s-%s:sub":"system:serviceaccount:kube-system:kube-controller-manager"}}}]}'
                 toFieldPath: spec.forProvider.assumeRolePolicy
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.arn
@@ -1329,9 +1355,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-network"
+                    fmt: "%s-%s-cloud-network-config-controller"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1340,9 +1367,14 @@ spec:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s-%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"%s.s3.%s.amazonaws.com/%s-%s:sub":"system:serviceaccount:openshift-cloud-network-config-controller:cloud-network-config-controller"}}}]}'
                 toFieldPath: spec.forProvider.assumeRolePolicy
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.arn
@@ -1365,9 +1397,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-node-pool-management"
+                    fmt: "%s-%s-node-pool"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1376,9 +1409,14 @@ spec:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s-%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"%s.s3.%s.amazonaws.com/%s-%s:sub":"system:serviceaccount:kube-system:capa-controller-manager"}}}]}'
                 toFieldPath: spec.forProvider.assumeRolePolicy
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.arn
@@ -1401,9 +1439,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-storage"
+                    fmt: "%s-%s-aws-ebs-csi-driver-controller"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1412,9 +1451,14 @@ spec:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: spec.hypershift.oidcBucketName
+                    - fromFieldPath: spec.hypershift.oidcBucketRegion
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s"},"Action":"sts:AssumeRoleWithWebIdentity"}]}'
+                    fmt: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/%s.s3.%s.amazonaws.com/%s-%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"%s.s3.%s.amazonaws.com/%s-%s:sub":"system:serviceaccount:openshift-cluster-csi-drivers:aws-ebs-csi-driver-controller-sa"}}}]}'
                 toFieldPath: spec.forProvider.assumeRolePolicy
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.arn
@@ -1437,6 +1481,7 @@ spec:
                 providerConfigRef:
                   name: default
             patches:
+              # Matches hypershift: profileName=infraID+"-worker", roleName=profileName+"-role".
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1444,7 +1489,7 @@ spec:
                     - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-%s-worker"
+                    fmt: "%s-%s-worker-role"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: iam-policy-worker
@@ -1492,7 +1537,7 @@ spec:
                     - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-%s-worker-profile"
+                    fmt: "%s-%s-worker"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           # ──────────────────────────────────────────────────
@@ -1795,12 +1840,13 @@ spec:
               spec:
                 # Ensure the HostedCluster is removed when the composite/claim is deleted.
                 deletionPolicy: Delete
-                # NodePool must not reconcile until the control plane has published kubeconfig,
-                # ignition material, and AWS defaults (SG, etc.); otherwise the nodepool-controller
-                # races with HostedCluster provisioning (KubeConfig / ignition-server-ca-cert / default SG).
+                # NodePool must not reconcile until the control plane has published kubeconfig and the
+                # guest AWS cloud provider can use IRSA (kube-cloud-controller creates the default SG).
+                # Kubeconfig alone is not enough: NodePool then fails with DefaultSGNotReady while
+                # aws-cloud-controller-manager is down (e.g. ValidAWSIdentityProvider=False / WebIdentityErr).
                 readiness:
                   policy: DeriveFromCelQuery
-                  celQuery: 'has(object.status.kubeconfig) && object.status.kubeconfig.name != ""'
+                  celQuery: 'has(object.status.kubeconfig) && object.status.kubeconfig.name != "" && object.status.conditions.exists(c, c.type == "ValidAWSIdentityProvider" && c.status == "True")'
                 forProvider:
                   manifest:
                     apiVersion: hypershift.openshift.io/v1beta1
@@ -1963,15 +2009,17 @@ spec:
                   string:
                     fmt: "%s%s"
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.zone
+              # Must match oidc-provider URL and hypershift oidcDiscoveryURL(bucket, region, infraID).
               - type: CombineFromComposite
                 combine:
                   variables:
                     - fromFieldPath: spec.hypershift.oidcBucketName
                     - fromFieldPath: spec.hypershift.oidcBucketRegion
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "https://%s.s3.%s.amazonaws.com/%s"
+                    fmt: "https://%s.s3.%s.amazonaws.com/%s-%s"
                 toFieldPath: spec.forProvider.manifest.spec.issuerURL
               - type: FromCompositeFieldPath
                 fromFieldPath: status.controlPlaneOperatorRoleArn
