@@ -33,5 +33,4 @@ global:
       region: ""
       bucketName: ""
       createBucket: false
-      publicReadAccess: true
       additionalTags: {}

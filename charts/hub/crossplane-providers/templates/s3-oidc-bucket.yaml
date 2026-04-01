@@ -35,7 +35,6 @@ spec:
       - objectOwnership: BucketOwnerPreferred
   providerConfigRef:
     name: {{ .Values.global.crossplane.providerConfig.name }}
-{{- if .Values.global.hypershift.oidc.publicReadAccess }}
 ---
 apiVersion: s3.aws.upbound.io/v1beta1
 kind: BucketPublicAccessBlock
@@ -73,6 +72,7 @@ spec:
         "Version": "2012-10-17",
         "Statement": [
           {
+            "Sid": "HyperShiftOIDCS3IssuerPublicRead",
             "Effect": "Allow",
             "Principal": "*",
             "Action": "s3:GetObject",
@@ -82,5 +82,4 @@ spec:
       }
   providerConfigRef:
     name: {{ .Values.global.crossplane.providerConfig.name }}
-{{- end }}
 {{- end }}

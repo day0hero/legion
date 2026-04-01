@@ -45,7 +45,6 @@ global:
       region: us-east-2
       bucketName: legion-hypershift-oidc
       createBucket: true
-      publicReadAccess: true
       additionalTags:
         managed-by: crossplane
         purpose: hypershift-oidc
