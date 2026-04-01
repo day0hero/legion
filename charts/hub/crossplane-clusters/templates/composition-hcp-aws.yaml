@@ -1082,14 +1082,16 @@ spec:
                 providerConfigRef:
                   name: default
             patches:
+              # HyperShift expects a separate private zone at <cluster>.hypershift.local for
+              # control-plane DNS — not the same name as the ingress zone (<cluster>.<baseDomain>),
+              # which Route 53 rejects as a duplicate private zone.
               - type: CombineFromComposite
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
-                    - fromFieldPath: spec.baseDomain
                   strategy: string
                   string:
-                    fmt: "%s.%s"
+                    fmt: "%s.hypershift.local"
                 toFieldPath: spec.forProvider.name
               - type: FromCompositeFieldPath
                 fromFieldPath: status.vpcId
