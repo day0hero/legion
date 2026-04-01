@@ -1143,8 +1143,11 @@ spec:
                   clientIdList:
                     - "openshift"
                     - "sts.amazonaws.com"
+                  # *.s3.<region>.amazonaws.com chain (must match oidcBucketRegion or STS/IRSA fails).
                   thumbprintList:
-                    - "a9d53002e97e00ab26eb159de1eb52e1a710c279"
+                    - "06b25927c42a721631c1efd9431e648fa62e1e39"
+                    - "2ad974a775f73cbbdbbd8f5ac3a49255fa8fb1f8c"
+                    - "ae850e360c414bfa50fea2664a0791cd2e5e4b96"
                 providerConfigRef:
                   name: default
             patches:
