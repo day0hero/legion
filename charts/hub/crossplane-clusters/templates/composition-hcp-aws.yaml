@@ -1799,6 +1799,10 @@ spec:
                             zone: ""
                             subnet:
                               filters:
+                                # Scope to this cluster's VPC; tag-only selection matches subnets in other VPCs.
+                                - name: "vpc-id"
+                                  values:
+                                    - ""
                                 - name: "tag:kubernetes.io/role/internal-elb"
                                   values:
                                     - "1"
@@ -1886,6 +1890,11 @@ spec:
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.vpc
                 policy:
                   fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.vpcId
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.subnet.filters[0].values[0]
+                policy:
+                  fromFieldPath: Required
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1971,6 +1980,9 @@ spec:
                             type: gp3
                           subnet:
                             filters:
+                              - name: "vpc-id"
+                                values:
+                                  - ""
                               - name: "tag:kubernetes.io/role/internal-elb"
                                 values:
                                   - "1"
@@ -1979,6 +1991,11 @@ spec:
                 providerConfigRef:
                   name: default
             patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.vpcId
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.subnet.filters[0].values[0]
+                policy:
+                  fromFieldPath: Required
               - type: CombineFromComposite
                 combine:
                   variables:
