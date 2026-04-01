@@ -1651,6 +1651,7 @@ spec:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
+                deletionPolicy: Delete
                 forProvider:
                   manifest:
                     apiVersion: external-secrets.io/v1beta1
@@ -1705,6 +1706,7 @@ spec:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
+                deletionPolicy: Delete
                 forProvider:
                   manifest:
                     apiVersion: external-secrets.io/v1beta1
@@ -1766,6 +1768,8 @@ spec:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
+                # Ensure the HostedCluster is removed when the composite/claim is deleted.
+                deletionPolicy: Delete
                 forProvider:
                   manifest:
                     apiVersion: hypershift.openshift.io/v1beta1
@@ -1958,6 +1962,7 @@ spec:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
+                deletionPolicy: Delete
                 forProvider:
                   manifest:
                     apiVersion: hypershift.openshift.io/v1beta1
