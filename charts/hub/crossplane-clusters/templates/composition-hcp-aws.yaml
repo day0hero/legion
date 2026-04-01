@@ -1858,6 +1858,10 @@ spec:
                         vendor: OpenShift
                         cluster.open-cluster-management.io/clusterset: default
                     spec:
+                      # Aligned with hypershift create cluster aws --render (see _sandbox/hypershift_output.yaml).
+                      autoscaling: {}
+                      capabilities: {}
+                      controllerAvailabilityPolicy: SingleReplica
                       release:
                         image: ""
                       pullSecret:
@@ -1875,6 +1879,7 @@ spec:
                         aws:
                           region: us-east-2
                           endpointAccess: Public
+                          multiArch: false
                           cloudProviderConfig:
                             vpc: ""
                             zone: ""
@@ -1903,13 +1908,13 @@ spec:
                         - service: APIServer
                           servicePublishingStrategy:
                             type: LoadBalancer
-                        - service: OAuthServer
+                        - service: Ignition
                           servicePublishingStrategy:
                             type: Route
                         - service: Konnectivity
                           servicePublishingStrategy:
                             type: Route
-                        - service: Ignition
+                        - service: OAuthServer
                           servicePublishingStrategy:
                             type: Route
                       infraID: ""
@@ -1918,7 +1923,17 @@ spec:
                         baseDomain: ""
                         publicZoneID: ""
                         privateZoneID: ""
+                      etcd:
+                        managementType: Managed
+                        managed:
+                          storage:
+                            type: PersistentVolume
+                            persistentVolume:
+                              size: 8Gi
+                              storageClassName: gp3-csi
+                      olmCatalogPlacement: management
                       fips: false
+                      sshKey: {}
                 providerConfigRef:
                   name: default
             patches:
@@ -2081,11 +2096,14 @@ spec:
                       name: ""
                       namespace: clusters
                     spec:
+                      arch: amd64
                       clusterName: ""
                       replicas: 3
                       management:
                         autoRepair: true
                         upgradeType: Replace
+                        nodeDrainTimeout: 0s
+                        nodeVolumeDetachTimeout: 0s
                       platform:
                         type: AWS
                         aws:
