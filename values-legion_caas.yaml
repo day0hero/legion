@@ -18,6 +18,8 @@ global:
           package: xpkg.upbound.io/upbound/provider-aws-s3
         - name: provider-aws-iam
           package: xpkg.upbound.io/upbound/provider-aws-iam
+        - name: provider-aws-route53
+          package: xpkg.upbound.io/upbound/provider-aws-route53
 
     kubernetesProvider:
       version: v1.2.1
@@ -31,10 +33,14 @@ global:
         secretKey: credentials
         fromVault: true
 
-  # ── HyperShift OIDC S3 Bucket ───────────────────────────────
-  # Single definition for the OIDC bucket; consumed by both
-  # legion-credentials (ESO secret) and crossplane-providers (bucket lifecycle)
+  # ── HyperShift Configuration ────────────────────────────────
   hypershift:
+    # Route53 public hosted zone ID for the base domain.
+    # Look up once:  aws route53 list-hosted-zones-by-name \
+    #   --dns-name <baseDomain> \
+    #   --query 'HostedZones[?Config.PrivateZone==`false`].Id' --output text
+    publicZoneID: "Z001281810MV5UN93UQKQ"
+
     oidc:
       region: us-east-2
       bucketName: legion-hypershift-oidc

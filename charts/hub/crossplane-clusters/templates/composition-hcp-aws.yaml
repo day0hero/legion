@@ -990,6 +990,127 @@ spec:
                 fromFieldPath: spec.cloudRegion
                 toFieldPath: spec.forProvider.region
 
+          - name: worker-sg-self-ingress
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: SecurityGroupRule
+              spec:
+                forProvider:
+                  region: us-east-2
+                  type: ingress
+                  fromPort: 0
+                  toPort: 0
+                  protocol: "-1"
+                  self: true
+                  securityGroupIdSelector:
+                    matchControllerRef: true
+                  description: "Allow all traffic between worker nodes"
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cloudRegion
+                toFieldPath: spec.forProvider.region
+
+          # ──────────────────────────────────────────────────
+          # Private Hosted Zones (Route53)
+          # ──────────────────────────────────────────────────
+          - name: private-zone-ingress
+            base:
+              apiVersion: route53.aws.upbound.io/v1beta1
+              kind: Zone
+              metadata:
+                labels:
+                  legion.io/zone-type: ingress
+              spec:
+                forProvider:
+                  name: ""
+                  forceDestroy: true
+                  vpc:
+                    - vpcId: ""
+                      vpcRegion: ""
+                  tags:
+                    Name: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: spec.baseDomain
+                  strategy: string
+                  string:
+                    fmt: "%s.%s"
+                toFieldPath: spec.forProvider.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.vpcId
+                toFieldPath: spec.forProvider.vpc[0].vpcId
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cloudRegion
+                toFieldPath: spec.forProvider.vpc[0].vpcRegion
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-private-zone-ingress"
+                toFieldPath: spec.forProvider.tags.Name
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.zoneId
+                toFieldPath: status.privateZoneID
+
+          - name: private-zone-local
+            base:
+              apiVersion: route53.aws.upbound.io/v1beta1
+              kind: Zone
+              metadata:
+                labels:
+                  legion.io/zone-type: local
+              spec:
+                forProvider:
+                  name: ""
+                  forceDestroy: true
+                  vpc:
+                    - vpcId: ""
+                      vpcRegion: ""
+                  tags:
+                    Name: ""
+                providerConfigRef:
+                  name: default
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: spec.baseDomain
+                  strategy: string
+                  string:
+                    fmt: "%s.%s"
+                toFieldPath: spec.forProvider.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.vpcId
+                toFieldPath: spec.forProvider.vpc[0].vpcId
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cloudRegion
+                toFieldPath: spec.forProvider.vpc[0].vpcRegion
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                  strategy: string
+                  string:
+                    fmt: "%s-private-zone-local"
+                toFieldPath: spec.forProvider.tags.Name
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.zoneId
+                toFieldPath: status.localZoneID
+
           # ──────────────────────────────────────────────────
           # OIDC provider (HyperShift S3 issuer)
           # ──────────────────────────────────────────────────
@@ -1704,6 +1825,8 @@ spec:
                       issuerURL: ""
                       dns:
                         baseDomain: ""
+                        publicZoneID: ""
+                        privateZoneID: ""
                       fips: false
                 providerConfigRef:
                   name: default
@@ -1717,6 +1840,14 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.baseDomain
                 toFieldPath: spec.forProvider.manifest.spec.dns.baseDomain
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.hypershift.publicZoneID
+                toFieldPath: spec.forProvider.manifest.spec.dns.publicZoneID
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.privateZoneID
+                toFieldPath: spec.forProvider.manifest.spec.dns.privateZoneID
+                policy:
+                  fromFieldPath: Required
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.cloudRegion
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.region

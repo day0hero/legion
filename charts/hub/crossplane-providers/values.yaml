@@ -12,6 +12,8 @@ global:
           package: xpkg.upbound.io/upbound/provider-aws-s3
         - name: provider-aws-iam
           package: xpkg.upbound.io/upbound/provider-aws-iam
+        - name: provider-aws-route53
+          package: xpkg.upbound.io/upbound/provider-aws-route53
 
     kubernetesProvider:
       version: v1.2.1
@@ -26,6 +28,7 @@ global:
         fromVault: true
 
   hypershift:
+    publicZoneID: ""
     oidc:
       region: ""
       bucketName: ""

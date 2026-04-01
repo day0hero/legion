@@ -23,3 +23,5 @@ global:
   crossplane:
     providerConfig:
       name: default
+  hypershift:
+    publicZoneID: ""

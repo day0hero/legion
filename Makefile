@@ -3,3 +3,23 @@
 # You can add custom targets above or below the include line
 
 include Makefile-common
+
+VALUES_CAAS := values-legion_caas.yaml
+
+##@ Legion Setup Tasks
+.PHONY: setup-zone-id
+setup-zone-id: ## Look up Route53 public zone ID and update values (DOMAIN=example.com)
+	@if [ -z "$(DOMAIN)" ]; then \
+		echo "Usage: make setup-zone-id DOMAIN=aws.validatedpatterns.io"; \
+		exit 1; \
+	fi; \
+	ZONE_ID=$$(aws route53 list-hosted-zones-by-name \
+		--dns-name "$(DOMAIN)" \
+		--query 'HostedZones[?Config.PrivateZone==`false` && Name==`$(DOMAIN).`].Id' \
+		--output text | sed 's|/hostedzone/||'); \
+	if [ -z "$$ZONE_ID" ]; then \
+		echo "Error: no public hosted zone found for '$(DOMAIN)'"; \
+		exit 1; \
+	fi; \
+	sed -i 's|^\(\s*publicZoneID:\s*\).*|\1"'"$$ZONE_ID"'"|' $(VALUES_CAAS); \
+	echo "$(VALUES_CAAS) updated — publicZoneID: $$ZONE_ID ($(DOMAIN))"

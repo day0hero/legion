@@ -148,6 +148,12 @@ spec:
                         - Private
                         - PublicAndPrivate
                       default: Public
+                    publicZoneID:
+                      type: string
+                      description: "Route53 public hosted zone ID for the base domain"
+                      {{- if .Values.global.hypershift.publicZoneID }}
+                      default: {{ .Values.global.hypershift.publicZoneID | quote }}
+                      {{- end }}
                 credentials:
                   type: object
                   description: "Credential references for cluster provisioning"
@@ -200,6 +206,12 @@ spec:
                   type: string
                 storageRoleArn:
                   type: string
+                privateZoneID:
+                  type: string
+                  description: "Route53 private hosted zone ID for cluster ingress"
+                localZoneID:
+                  type: string
+                  description: "Route53 local hosted zone ID for PrivateLink"
                 clusterStatus:
                   type: string
                   description: "Current status of the cluster"
