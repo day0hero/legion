@@ -36,6 +36,8 @@ spec:
                   enableDnsHostnames: true
                   tags:
                     Name: ""
+                    # Scopes subnet discovery to this composite only (see HostedCluster/NodePool filters).
+                    LegionClusterName: ""
                 providerConfigRef:
                   name: default
             patches:
@@ -45,6 +47,9 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.networking.vpcCidr
                 toFieldPath: spec.forProvider.cidrBlock
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.clusterName
+                toFieldPath: spec.forProvider.tags.LegionClusterName
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -248,12 +253,16 @@ spec:
                   tags:
                     Name: ""
                     "kubernetes.io/role/internal-elb": "1"
+                    LegionClusterName: ""
                 providerConfigRef:
                   name: default
             patches:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.cloudRegion
                 toFieldPath: spec.forProvider.region
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.clusterName
+                toFieldPath: spec.forProvider.tags.LegionClusterName
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -293,12 +302,16 @@ spec:
                   tags:
                     Name: ""
                     "kubernetes.io/role/internal-elb": "1"
+                    LegionClusterName: ""
                 providerConfigRef:
                   name: default
             patches:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.cloudRegion
                 toFieldPath: spec.forProvider.region
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.clusterName
+                toFieldPath: spec.forProvider.tags.LegionClusterName
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -338,12 +351,16 @@ spec:
                   tags:
                     Name: ""
                     "kubernetes.io/role/internal-elb": "1"
+                    LegionClusterName: ""
                 providerConfigRef:
                   name: default
             patches:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.cloudRegion
                 toFieldPath: spec.forProvider.region
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.clusterName
+                toFieldPath: spec.forProvider.tags.LegionClusterName
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1803,13 +1820,17 @@ spec:
                             zone: ""
                             subnet:
                               filters:
-                                # Scope to this cluster's VPC; tag-only selection matches subnets in other VPCs.
+                                # vpc-id + internal-elb + LegionClusterName: only subnets from this composite
+                                # (internal-elb alone matches private subnets in every VPC in the account).
                                 - name: "vpc-id"
                                   values:
                                     - ""
                                 - name: "tag:kubernetes.io/role/internal-elb"
                                   values:
                                     - "1"
+                                - name: "tag:LegionClusterName"
+                                  values:
+                                    - ""
                           rolesRef:
                             controlPlaneOperatorARN: ""
                             imageRegistryARN: ""
@@ -1899,6 +1920,9 @@ spec:
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.subnet.filters[0].values[0]
                 policy:
                   fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.clusterName
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.cloudProviderConfig.subnet.filters[2].values[0]
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1991,6 +2015,9 @@ spec:
                               - name: "tag:kubernetes.io/role/internal-elb"
                                 values:
                                   - "1"
+                              - name: "tag:LegionClusterName"
+                                values:
+                                  - ""
                       release:
                         image: ""
                 providerConfigRef:
@@ -2001,6 +2028,9 @@ spec:
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.subnet.filters[0].values[0]
                 policy:
                   fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.clusterName
+                toFieldPath: spec.forProvider.manifest.spec.platform.aws.subnet.filters[2].values[0]
               - type: CombineFromComposite
                 combine:
                   variables:
