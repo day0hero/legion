@@ -1438,9 +1438,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-worker"
+                    fmt: "%s-%s-worker"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: iam-policy-worker
@@ -1462,9 +1463,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-worker-policy"
+                    fmt: "%s-%s-worker-policy"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           - name: worker-instance-profile
@@ -1484,9 +1486,10 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-worker-profile"
+                    fmt: "%s-%s-worker-profile"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           # ──────────────────────────────────────────────────
@@ -1865,8 +1868,16 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.clusterName
                 toFieldPath: spec.forProvider.manifest.metadata.name
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.clusterName
+              # Unique per XLegionCluster so HyperShift does not reuse a default worker SG / IAM profile
+              # from a prior VPC when the same spec.clusterName is reprovisioned (stale SG in wrong VPC).
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.uid
+                  strategy: string
+                  string:
+                    fmt: "%s-%s"
                 toFieldPath: spec.forProvider.manifest.spec.infraID
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.baseDomain
