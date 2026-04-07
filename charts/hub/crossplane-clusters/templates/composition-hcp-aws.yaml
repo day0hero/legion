@@ -1475,7 +1475,7 @@ spec:
                 providerConfigRef:
                   name: default
             patches:
-              # Matches hypershift: profileName=infraID+"-worker", roleName=profileName+"-role".
+              # Role name = infraID + "-worker-role" (HyperShift worker role for nodes).
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1524,6 +1524,8 @@ spec:
                 providerConfigRef:
                   name: default
             patches:
+              # HyperShift sets capa AWSMachine IAMInstanceProfile to "{infraID}-worker-profile"
+              # (hypershift-operator/controllers/nodepool/aws.go), not "{infraID}-worker".
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -1531,7 +1533,7 @@ spec:
                     - fromFieldPath: metadata.uid
                   strategy: string
                   string:
-                    fmt: "%s-%s-worker"
+                    fmt: "%s-%s-worker-profile"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
 
           # ──────────────────────────────────────────────────
