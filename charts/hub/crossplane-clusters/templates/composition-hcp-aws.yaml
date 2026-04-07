@@ -2096,8 +2096,6 @@ spec:
                       management:
                         autoRepair: true
                         upgradeType: Replace
-                        nodeDrainTimeout: 0s
-                        nodeVolumeDetachTimeout: 0s
                       platform:
                         type: AWS
                         aws:
