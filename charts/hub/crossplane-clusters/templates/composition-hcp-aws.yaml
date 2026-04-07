@@ -1182,14 +1182,14 @@ spec:
                 providerConfigRef:
                   name: default
             patches:
+              # IAM role names max 64 chars; clusterName+full UUID + suffix exceeds that — use composite name.
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
-                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
-                    fmt: "%s-%s-control-plane-operator"
+                    fmt: "%s-control-plane-operator"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               # Trust policy matches hypershift oidcTrustPolicy (kube-system:control-plane-operator).
               - type: CombineFromComposite
@@ -1228,11 +1228,10 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
-                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
-                    fmt: "%s-%s-openshift-image-registry"
+                    fmt: "%s-openshift-image-registry"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1270,11 +1269,10 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
-                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
-                    fmt: "%s-%s-openshift-ingress"
+                    fmt: "%s-openshift-ingress"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1312,11 +1310,10 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
-                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
-                    fmt: "%s-%s-cloud-controller"
+                    fmt: "%s-cloud-controller"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1354,11 +1351,10 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
-                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
-                    fmt: "%s-%s-cloud-network-config-controller"
+                    fmt: "%s-cloud-network-config-controller"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1396,11 +1392,10 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
-                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
-                    fmt: "%s-%s-node-pool"
+                    fmt: "%s-node-pool"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1438,11 +1433,10 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
-                    - fromFieldPath: metadata.uid
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
-                    fmt: "%s-%s-aws-ebs-csi-driver-controller"
+                    fmt: "%s-aws-ebs-csi-driver-controller"
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
               - type: CombineFromComposite
                 combine:
@@ -1561,7 +1555,7 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
                     fmt: "%s-control-plane-operator-policy"
@@ -1585,7 +1579,7 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
                     fmt: "%s-image-registry-policy"
@@ -1609,7 +1603,7 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
                     fmt: "%s-ingress-policy"
@@ -1633,7 +1627,7 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
                     fmt: "%s-kube-cloud-controller-policy"
@@ -1657,7 +1651,7 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
                     fmt: "%s-network-policy"
@@ -1681,7 +1675,7 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
                     fmt: "%s-node-pool-management-policy"
@@ -1705,7 +1699,7 @@ spec:
               - type: CombineFromComposite
                 combine:
                   variables:
-                    - fromFieldPath: spec.clusterName
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string:
                     fmt: "%s-storage-policy"
@@ -2146,6 +2140,48 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: status.vpcId
                 toFieldPath: spec.forProvider.manifest.spec.platform.aws.subnet.filters[0].values[0]
+                policy:
+                  fromFieldPath: Required
+              # Same prerequisites as hosted-cluster; otherwise NodePool Object is composed while
+              # hosted-cluster Object is still omitted and dependsOn points at a missing resource.
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.privateZoneID
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[legion.io/cp-gate-private-zone]
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.controlPlaneOperatorRoleArn
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[legion.io/cp-gate-cpo-arn]
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.imageRegistryRoleArn
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[legion.io/cp-gate-ir-arn]
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.ingressRoleArn
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[legion.io/cp-gate-ing-arn]
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.kubeCloudControllerRoleArn
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[legion.io/cp-gate-kcc-arn]
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.networkRoleArn
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[legion.io/cp-gate-net-arn]
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.nodePoolManagementRoleArn
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[legion.io/cp-gate-npm-arn]
+                policy:
+                  fromFieldPath: Required
+              - type: FromCompositeFieldPath
+                fromFieldPath: status.storageRoleArn
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[legion.io/cp-gate-sto-arn]
                 policy:
                   fromFieldPath: Required
               - type: FromCompositeFieldPath
